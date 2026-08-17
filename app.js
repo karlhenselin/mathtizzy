@@ -1,8 +1,15 @@
 const STORAGE_KEY = "mathtizzy-progress";
 const FACT_RETRY_AFTER = 2;
-const FACT_FAST_MS = 2500;
+const FAST_SEC_MIN = 2;
+const FAST_SEC_MAX = 5;
+const FAST_SEC_DEFAULT = 3;
 const FACT_SLOW_MS = 8000;
 const FACT_TIME_CAP_MS = 20000;
+const SLOW_BUMP_SEC = 0.1;
+const SLOW_BUMP_STREAK = 4;
+const SLOW_BUMP_MIN_RIGHTS = 8;
+const SLOW_BUMP_COOLDOWN = 6;
+const SLOW_NEAR_RATIO = 0.9;
 const FACT_RED = [231, 111, 81];
 const FACT_MID = [244, 208, 96];
 const FACT_GREEN = [42, 157, 143];
@@ -10,18 +17,18 @@ const OP_TITLES = { "+": "Addition", "-": "Subtraction", "×": "Multiplication",
 const factPoolCache = new Map();
 
 const LEVELS = [
-  { name: "Tiny Totals", blurb: "Add numbers up to 5.", ops: ["+"], min: 1, max: 5, needed: 120 },
-  { name: "Adding Up", blurb: "Addition facts through 10.", ops: ["+"], min: 1, max: 10, needed: 150 },
-  { name: "Take Away", blurb: "Subtraction without negatives.", ops: ["-"], min: 1, max: 10, needed: 150 },
-  { name: "Plus & Minus", blurb: "Mix addition and subtraction.", ops: ["+", "-"], min: 1, max: 12, needed: 180 },
-  { name: "Times Starter", blurb: "Multiplication facts through 5.", ops: ["×"], min: 1, max: 5, needed: 150 },
-  { name: "Times Tables", blurb: "Multiplication facts through 10.", ops: ["×"], min: 1, max: 10, needed: 180 },
-  { name: "Fair Shares", blurb: "Division facts with whole-number answers.", ops: ["÷"], min: 1, max: 10, needed: 150 },
-  { name: "Fact Mixer", blurb: "All four operations through 12.", ops: ["+", "-", "×", "÷"], min: 1, max: 12, needed: 225 },
-  { name: "Bigger Bites", blurb: "Larger addends, still-solid facts.", ops: ["+", "-", "×", "÷"], min: 2, max: 20, mulMax: 12, needed: 225 },
-  { name: "Two-Digit Mix", blurb: "Two-digit addition and subtraction.", ops: ["+", "-"], min: 10, max: 50, needed: 180 },
-  { name: "Speed Facts", blurb: "Classic facts with a 7-second clock.", ops: ["+", "-", "×", "÷"], min: 1, max: 12, needed: 225, timeLimit: 7 },
-  { name: "Mathlete", blurb: "Expert mix. 5 seconds each.", ops: ["+", "-", "×", "÷"], min: 2, max: 20, mulMax: 12, needed: 300, timeLimit: 5 },
+  { name: "Tiny Totals", blurb: "Add numbers up to 5.", ops: ["+"], min: 1, max: 5 },
+  { name: "Adding Up", blurb: "Addition facts through 10.", ops: ["+"], min: 1, max: 10 },
+  { name: "Take Away", blurb: "Subtraction without negatives.", ops: ["-"], min: 1, max: 10 },
+  { name: "Plus & Minus", blurb: "Mix addition and subtraction.", ops: ["+", "-"], min: 1, max: 12 },
+  { name: "Times Starter", blurb: "Multiplication facts through 5.", ops: ["×"], min: 1, max: 5 },
+  { name: "Times Tables", blurb: "Multiplication facts through 10.", ops: ["×"], min: 1, max: 10 },
+  { name: "Fair Shares", blurb: "Division facts with whole-number answers.", ops: ["÷"], min: 1, max: 10 },
+  { name: "Fact Mixer", blurb: "All four operations through 12.", ops: ["+", "-", "×", "÷"], min: 1, max: 12 },
+  { name: "Bigger Bites", blurb: "Larger addends, still-solid facts.", ops: ["+", "-", "×", "÷"], min: 2, max: 20, mulMax: 12 },
+  { name: "Two-Digit Mix", blurb: "Two-digit addition and subtraction.", ops: ["+", "-"], min: 10, max: 50 },
+  { name: "Speed Facts", blurb: "Classic facts with a 7-second clock.", ops: ["+", "-", "×", "÷"], min: 1, max: 12, timeLimit: 7 },
+  { name: "Mathlete", blurb: "Expert mix. 5 seconds each.", ops: ["+", "-", "×", "÷"], min: 2, max: 20, mulMax: 12, timeLimit: 5 },
 ];
 
 const PRAISE = [
@@ -41,22 +48,35 @@ const PRAISE = [
   "Bravo!",
 ];
 
+const SLOW_NOTES = [
+  "Right, but a bit slow.",
+  "Correct — faster next time.",
+  "Yes, but not fast enough.",
+  "Got it — pick up the pace.",
+  "Right — that was over the limit.",
+];
+
 const state = {
   levelIndex: 0,
-  mastery: 0,
   streak: 0,
   bestStreak: 0,
   correct: 0,
   attempted: 0,
   sound: true,
+  fastSeconds: FAST_SEC_DEFAULT,
   finished: false,
+  heldAtLevel: false,
   input: "",
   problem: null,
   locked: false,
   timerId: null,
   remaining: null,
+  timerPaused: false,
+  pausedAt: 0,
   lastPraise: "",
   shownAt: 0,
+  slowRun: 0,
+  attemptsSinceBump: 0,
   factScores: {},
   retrySoon: [],
 };
@@ -70,7 +90,9 @@ const els = {
   homeSolved: document.getElementById("homeSolved"),
   startBtn: document.getElementById("startBtn"),
   resetBtn: document.getElementById("resetBtn"),
+  homeSettingsBtn: document.getElementById("homeSettingsBtn"),
   homeBtn: document.getElementById("homeBtn"),
+  settingsBtn: document.getElementById("settingsBtn"),
   soundBtn: document.getElementById("soundBtn"),
   levelKicker: document.getElementById("levelKicker"),
   levelName: document.getElementById("levelName"),
@@ -103,7 +125,25 @@ const els = {
   resetOverlay: document.getElementById("resetOverlay"),
   resetCancelBtn: document.getElementById("resetCancelBtn"),
   resetConfirmBtn: document.getElementById("resetConfirmBtn"),
+  settingsOverlay: document.getElementById("settingsOverlay"),
+  fastSlider: document.getElementById("fastSlider"),
+  fastSliderValue: document.getElementById("fastSliderValue"),
+  settingsDoneBtn: document.getElementById("settingsDoneBtn"),
 };
+
+function clampFastSeconds(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return FAST_SEC_DEFAULT;
+  return Math.min(FAST_SEC_MAX, Math.max(FAST_SEC_MIN, Math.round(n * 100) / 100));
+}
+
+function formatSeconds(seconds) {
+  return clampFastSeconds(seconds).toFixed(2);
+}
+
+function fastMs() {
+  return state.fastSeconds * 1000;
+}
 
 function rand(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -139,11 +179,12 @@ function factAvgMs(stats) {
 }
 
 function factWeight(stats) {
-  if (!stats || (!stats.right && !stats.wrong)) return 1;
-  if (!stats.right) return 1 + stats.wrong * 2;
+  if (isFactGreen(stats)) return 0.06;
+  if (!stats || (!stats.right && !stats.wrong)) return 12;
+  if (!stats.right) return 16 + stats.wrong * 3;
   const avg = factAvgMs(stats);
-  if (avg == null || avg <= FACT_FAST_MS) return 1 + stats.wrong;
-  return 1 + stats.wrong + Math.min(6, (avg - FACT_FAST_MS) / FACT_FAST_MS);
+  const over = avg == null ? 0 : Math.max(0, (avg - fastMs()) / fastMs());
+  return 12 + stats.wrong + Math.min(8, over * 4);
 }
 
 function normalizeFactScores(raw) {
@@ -175,27 +216,51 @@ function factInLevel(fact, level) {
 }
 
 function getFactPool(level, op) {
-  const cacheKey = `${op}:${level.min}:${level.max}`;
+  const { min, max } = mapRange(level, op);
+  const cacheKey = `${op}:${min}:${max}`;
   if (factPoolCache.has(cacheKey)) return factPoolCache.get(cacheKey);
 
   const pool = [];
-  for (let a = level.min; a <= level.max; a += 1) {
-    for (let b = level.min; b <= level.max; b += 1) {
-      if (op === "-" && a < b) continue;
-      pool.push({
-        a,
-        b,
-        op,
-        answer: op === "+" ? a + b : a - b,
-      });
+  for (let row = min; row <= max; row += 1) {
+    for (let col = min; col <= max; col += 1) {
+      if (op === "-" && row < col) continue;
+      if (op === "÷") {
+        pool.push({ a: row * col, b: col, op, answer: row });
+      } else if (op === "×") {
+        pool.push({ a: row, b: col, op, answer: row * col });
+      } else if (op === "+") {
+        pool.push({ a: row, b: col, op, answer: row + col });
+      } else {
+        pool.push({ a: row, b: col, op, answer: row - col });
+      }
     }
   }
   factPoolCache.set(cacheKey, pool);
   return pool;
 }
 
+function getLevelFacts(level) {
+  return level.ops.flatMap((op) => getFactPool(level, op));
+}
+
+function isFactGreen(stats) {
+  const avg = factAvgMs(stats);
+  return avg != null && avg <= fastMs();
+}
+
+function levelMastery(level) {
+  const facts = getLevelFacts(level);
+  const total = facts.length;
+  let green = 0;
+  for (const fact of facts) {
+    if (isFactGreen(state.factScores[factKey(fact)])) green += 1;
+  }
+  const percent = !total ? 0 : green >= total ? 100 : Math.min(99, Math.round((green / total) * 100));
+  return { green, total, percent };
+}
+
 function pickWeightedFact(level, op) {
-  const pool = getFactPool(level, op);
+  const pool = op ? getFactPool(level, op) : getLevelFacts(level);
   const eligible = pool.filter((fact) => !sameProblem(fact, state.problem));
   const use = eligible.length ? eligible : pool;
   let total = 0;
@@ -262,6 +327,41 @@ function praiseFor(streak) {
   return streak > 1 ? `${line} Streak ${streak}` : line;
 }
 
+function overallCorrectAvgMs() {
+  let totalMs = 0;
+  let totalRight = 0;
+  for (const stats of Object.values(state.factScores)) {
+    if (!stats || !stats.right) continue;
+    totalMs += stats.correctMs;
+    totalRight += stats.right;
+  }
+  if (totalRight < SLOW_BUMP_MIN_RIGHTS) return null;
+  return totalMs / totalRight;
+}
+
+function maybeEaseTimeLimit() {
+  if (state.fastSeconds >= FAST_SEC_MAX) return false;
+  if (state.slowRun < SLOW_BUMP_STREAK) return false;
+  if (state.attemptsSinceBump < SLOW_BUMP_COOLDOWN) return false;
+  const avg = overallCorrectAvgMs();
+  if (avg == null || avg < fastMs() * SLOW_NEAR_RATIO) return false;
+  const next = clampFastSeconds(state.fastSeconds + SLOW_BUMP_SEC);
+  if (next <= state.fastSeconds) return false;
+  state.fastSeconds = next;
+  state.slowRun = 0;
+  state.attemptsSinceBump = 0;
+  state.heldAtLevel = false;
+  return true;
+}
+
+function slowNoteFor(elapsedMs) {
+  const options = SLOW_NOTES.filter((line) => line !== state.lastPraise);
+  const line = pick(options.length ? options : SLOW_NOTES);
+  state.lastPraise = line;
+  const took = (elapsedMs / 1000).toFixed(2);
+  return `${line} ${took}s — aim for ${formatSeconds(state.fastSeconds)}s.`;
+}
+
 function currentLevel() {
   return LEVELS[Math.min(state.levelIndex, LEVELS.length - 1)];
 }
@@ -271,26 +371,7 @@ function mulMax(level) {
 }
 
 function makeProblem(level) {
-  const op = pick(level.ops);
-  let a;
-  let b;
-  let answer;
-
-  if (op === "+") {
-    return pickWeightedFact(level, "+");
-  } else if (op === "-") {
-    return pickWeightedFact(level, "-");
-  } else if (op === "×") {
-    a = rand(1, mulMax(level));
-    b = rand(1, mulMax(level));
-    answer = a * b;
-  } else {
-    b = rand(1, mulMax(level));
-    answer = rand(1, mulMax(level));
-    a = b * answer;
-  }
-
-  return { a, b, op, answer };
+  return pickWeightedFact(level);
 }
 
 function generateProblem() {
@@ -312,13 +393,16 @@ function save() {
     STORAGE_KEY,
     JSON.stringify({
       levelIndex: state.levelIndex,
-      mastery: state.mastery,
       streak: state.streak,
       bestStreak: state.bestStreak,
       correct: state.correct,
       attempted: state.attempted,
       sound: state.sound,
+      fastSeconds: state.fastSeconds,
       finished: state.finished,
+      heldAtLevel: state.heldAtLevel,
+      slowRun: state.slowRun,
+      attemptsSinceBump: state.attemptsSinceBump,
       factScores: state.factScores,
       retrySoon: state.retrySoon,
     })
@@ -332,13 +416,16 @@ function load() {
     const data = JSON.parse(raw);
     Object.assign(state, {
       levelIndex: data.levelIndex ?? 0,
-      mastery: data.mastery ?? 0,
       streak: data.streak ?? 0,
       bestStreak: data.bestStreak ?? 0,
       correct: data.correct ?? 0,
       attempted: data.attempted ?? 0,
       sound: data.sound ?? true,
+      fastSeconds: clampFastSeconds(data.fastSeconds ?? FAST_SEC_DEFAULT),
       finished: data.finished ?? false,
+      heldAtLevel: data.heldAtLevel ?? false,
+      slowRun: Number(data.slowRun) || 0,
+      attemptsSinceBump: Number(data.attemptsSinceBump) || 0,
       factScores: normalizeFactScores(data.factScores),
       retrySoon: Array.isArray(data.retrySoon) ? data.retrySoon : [],
     });
@@ -375,12 +462,12 @@ function updateSoundButton() {
 
 function renderPlayHud() {
   const level = currentLevel();
-  const percent = Math.round((state.mastery / level.needed) * 100);
+  const { green, total, percent } = levelMastery(level);
   els.levelKicker.textContent = state.levelIndex >= LEVELS.length - 1 ? "Final level" : `Level ${state.levelIndex + 1}`;
   els.levelName.textContent = level.name;
-  els.masteryFill.style.width = `${Math.min(percent, 100)}%`;
-  els.masteryBar.setAttribute("aria-valuenow", String(Math.min(percent, 100)));
-  els.masteryLabel.textContent = `Mastery ${Math.min(percent, 100)}%`;
+  els.masteryFill.style.width = `${percent}%`;
+  els.masteryBar.setAttribute("aria-valuenow", String(percent));
+  els.masteryLabel.textContent = total ? `Mastery ${green}/${total}` : "Mastery 0%";
   els.streakValue.textContent = String(state.streak);
   els.accuracyValue.textContent = accuracyText();
   els.timerHud.hidden = !level.timeLimit;
@@ -400,7 +487,7 @@ function factFill(key) {
   if (!stats || (!stats.right && !stats.wrong)) return "#ffffff";
   if (!stats.right) return rgbCss(FACT_RED);
   const avg = factAvgMs(stats);
-  const t = 1 - (avg - FACT_FAST_MS) / (FACT_SLOW_MS - FACT_FAST_MS);
+  const t = 1 - (avg - fastMs()) / (FACT_SLOW_MS - fastMs());
   const u = Math.max(0, Math.min(1, t));
   if (u < 0.5) return rgbCss(mixRgb(FACT_RED, FACT_MID, u * 2));
   return rgbCss(mixRgb(FACT_MID, FACT_GREEN, (u - 0.5) * 2));
@@ -502,6 +589,7 @@ function setFactsOpen(open) {
   els.factsWrap.classList.toggle("is-open", open);
   els.factsBtn.setAttribute("aria-expanded", String(open));
   if (open) renderFactsMap();
+  syncFactsTimer();
 }
 
 function renderProblem() {
@@ -535,16 +623,38 @@ function clearTimer() {
   }
 }
 
-function startTimer() {
+function problemElapsedMs() {
+  let elapsed = state.shownAt ? performance.now() - state.shownAt : 0;
+  if (state.timerPaused && state.pausedAt) elapsed -= performance.now() - state.pausedAt;
+  return Math.max(0, elapsed);
+}
+
+function pauseClocks() {
+  if (state.locked || state.timerPaused) return;
+  state.timerPaused = true;
+  state.pausedAt = performance.now();
   clearTimer();
+}
+
+function resumeCountdown() {
   const level = currentLevel();
-  if (!level.timeLimit) {
-    els.timerValue.textContent = "—";
+  if (
+    !level.timeLimit ||
+    state.locked ||
+    state.timerPaused ||
+    !els.playScreen.classList.contains("is-active") ||
+    !els.overlay.hidden ||
+    !els.settingsOverlay.hidden ||
+    !els.resetOverlay.hidden ||
+    state.timerId ||
+    state.remaining == null ||
+    state.remaining <= 0
+  ) {
     return;
   }
-  state.remaining = level.timeLimit;
   els.timerValue.textContent = `${state.remaining}s`;
   state.timerId = window.setInterval(() => {
+    if (state.timerPaused || state.locked) return;
     state.remaining -= 1;
     els.timerValue.textContent = `${Math.max(state.remaining, 0)}s`;
     if (state.remaining <= 0) {
@@ -554,12 +664,46 @@ function startTimer() {
   }, 1000);
 }
 
+function resumeClocks() {
+  if (!state.timerPaused) return;
+  if (state.pausedAt && state.shownAt) {
+    state.shownAt += performance.now() - state.pausedAt;
+  }
+  state.timerPaused = false;
+  state.pausedAt = 0;
+  if (!state.locked) resumeCountdown();
+}
+
+function syncFactsTimer() {
+  if (factsPopOpen()) pauseClocks();
+  else resumeClocks();
+}
+
+function startTimer() {
+  clearTimer();
+  state.timerPaused = false;
+  state.pausedAt = 0;
+  const level = currentLevel();
+  if (!level.timeLimit) {
+    els.timerValue.textContent = "—";
+    if (factsPopOpen() || !els.settingsOverlay.hidden) pauseClocks();
+    return;
+  }
+  state.remaining = level.timeLimit;
+  els.timerValue.textContent = `${state.remaining}s`;
+  if (factsPopOpen() || !els.settingsOverlay.hidden) {
+    pauseClocks();
+    return;
+  }
+  resumeCountdown();
+}
+
 function nextProblem() {
   state.locked = false;
   state.input = "";
   state.problem = generateProblem();
   state.shownAt = performance.now();
-  els.problemCard.classList.remove("is-correct", "is-wrong");
+  els.problemCard.classList.remove("is-correct", "is-slow", "is-wrong");
   els.feedback.textContent = "";
   renderPlayHud();
   renderProblem();
@@ -568,6 +712,7 @@ function nextProblem() {
 
 function showOverlay({ title, blurb, stayNote = "", eyebrow = "Mastered", continueLabel = "Level up", stayLabel = "Stay here", canStay = true }) {
   setFactsOpen(false);
+  els.settingsOverlay.hidden = true;
   els.overlayEyebrow.textContent = eyebrow;
   els.overlayTitle.textContent = title;
   els.overlayBlurb.textContent = blurb;
@@ -582,15 +727,19 @@ function showOverlay({ title, blurb, stayNote = "", eyebrow = "Mastered", contin
 
 function maybeLevelUp() {
   const level = currentLevel();
-  if (state.mastery < level.needed) return;
+  const { green, total } = levelMastery(level);
+  if (!total || green < total) {
+    state.heldAtLevel = false;
+    return;
+  }
+  if (state.heldAtLevel) return;
 
   if (state.levelIndex >= LEVELS.length - 1) {
-    state.mastery = level.needed;
     state.finished = true;
     showOverlay({
       eyebrow: "Champion",
       title: "You finished the ladder",
-      blurb: "Keep practicing in Mathlete mode. Facts stay mixed and timed. Mastery starts over so you can fill the bar again.",
+      blurb: "Every Mathlete fact is in the green. Keep practicing mixed, timed facts, or reset if you want a fresh grid.",
       continueLabel: "Keep practicing",
       canStay: false,
     });
@@ -601,7 +750,7 @@ function maybeLevelUp() {
   const next = LEVELS[state.levelIndex + 1];
   showOverlay({
     title: level.name,
-    blurb: `Level up to ${next.name}: ${next.blurb} Or stay here and start the mastery bar over.`,
+    blurb: `Every fact is in the green. Level up to ${next.name}: ${next.blurb} Or stay here and keep practicing.`,
     stayNote: `Stay on ${level.name}: ${level.blurb}`,
   });
   save();
@@ -613,10 +762,13 @@ function grade(rawAnswer) {
   clearTimer();
 
   const correct = rawAnswer === state.problem.answer;
-  const elapsedMs = state.shownAt ? performance.now() - state.shownAt : 0;
+  const elapsedMs = problemElapsedMs();
+  const slow = correct && elapsedMs > fastMs();
   state.attempted += 1;
+  state.attemptsSinceBump += 1;
   recordFact(state.problem, correct, elapsedMs);
-  els.problemCard.classList.toggle("is-correct", correct);
+  els.problemCard.classList.toggle("is-correct", correct && !slow);
+  els.problemCard.classList.toggle("is-slow", slow);
   els.problemCard.classList.toggle("is-wrong", !correct);
   beep(correct);
 
@@ -624,11 +776,18 @@ function grade(rawAnswer) {
     state.correct += 1;
     state.streak += 1;
     state.bestStreak = Math.max(state.bestStreak, state.streak);
-    state.mastery += Math.min(state.streak, 6);
-    els.feedback.textContent = praiseFor(state.streak);
+    if (slow) {
+      state.slowRun += 1;
+      const eased = maybeEaseTimeLimit();
+      els.feedback.textContent = eased
+        ? `Right, but a bit slow. Limit eased to ${formatSeconds(state.fastSeconds)}s.`
+        : slowNoteFor(elapsedMs);
+    } else {
+      state.slowRun = 0;
+      els.feedback.textContent = praiseFor(state.streak);
+    }
   } else {
     state.streak = 0;
-    state.mastery = Math.max(0, state.mastery - 1);
     const shown = rawAnswer === null ? "Time's up." : "Not quite.";
     els.feedback.textContent = `${shown} It was ${state.problem.answer}.`;
     els.answerSlot.textContent = String(state.problem.answer);
@@ -642,7 +801,7 @@ function grade(rawAnswer) {
     maybeLevelUp();
     if (!els.overlay.hidden) return;
     nextProblem();
-  }, correct ? 450 : 2200);
+  }, slow ? 1600 : correct ? 450 : 2200);
 }
 
 function submit() {
@@ -651,7 +810,15 @@ function submit() {
 }
 
 function handleKey(key) {
-  if (!els.playScreen.classList.contains("is-active") || state.locked || !els.overlay.hidden) return;
+  if (
+    !els.playScreen.classList.contains("is-active") ||
+    state.locked ||
+    !els.overlay.hidden ||
+    !els.settingsOverlay.hidden ||
+    !els.resetOverlay.hidden
+  ) {
+    return;
+  }
   if (key >= "0" && key <= "9") {
     if (state.input.length >= 4) return;
     state.input += key;
@@ -674,16 +841,27 @@ function startPlay() {
 els.startBtn.addEventListener("click", startPlay);
 els.homeBtn.addEventListener("click", () => {
   clearTimer();
-  setFactsOpen(false);
   showScreen("home");
+  setFactsOpen(false);
   renderHome();
 });
-els.factsWrap.addEventListener("mouseenter", renderFactsMap);
-els.factsBtn.addEventListener("focus", renderFactsMap);
+els.factsWrap.addEventListener("mouseenter", () => {
+  renderFactsMap();
+  syncFactsTimer();
+});
+els.factsWrap.addEventListener("mouseleave", syncFactsTimer);
+els.factsWrap.addEventListener("focusin", () => {
+  renderFactsMap();
+  syncFactsTimer();
+});
+els.factsWrap.addEventListener("focusout", () => {
+  window.setTimeout(syncFactsTimer, 0);
+});
 els.factsBtn.addEventListener("click", (event) => {
   event.stopPropagation();
   if (window.matchMedia("(hover: hover)").matches) {
     renderFactsMap();
+    syncFactsTimer();
     return;
   }
   setFactsOpen(!els.factsWrap.classList.contains("is-open"));
@@ -704,13 +882,16 @@ function resetProgress() {
   localStorage.removeItem(STORAGE_KEY);
   Object.assign(state, {
     levelIndex: 0,
-    mastery: 0,
     streak: 0,
     bestStreak: 0,
     correct: 0,
     attempted: 0,
     sound: state.sound,
+    fastSeconds: state.fastSeconds,
     finished: false,
+    heldAtLevel: false,
+    slowRun: 0,
+    attemptsSinceBump: 0,
     factScores: {},
     retrySoon: [],
   });
@@ -721,6 +902,56 @@ function resetProgress() {
 els.resetBtn.addEventListener("click", showResetConfirm);
 els.resetCancelBtn.addEventListener("click", hideResetConfirm);
 els.resetConfirmBtn.addEventListener("click", resetProgress);
+function fastSecondsLabel(seconds) {
+  return `${formatSeconds(seconds)} seconds`;
+}
+
+function syncSettingsForm() {
+  els.fastSlider.value = String(state.fastSeconds);
+  els.fastSliderValue.textContent = fastSecondsLabel(state.fastSeconds);
+}
+
+function showSettings() {
+  setFactsOpen(false);
+  pauseClocks();
+  syncSettingsForm();
+  els.settingsOverlay.hidden = false;
+  els.fastSlider.focus();
+}
+
+function hideSettings() {
+  if (els.settingsOverlay.hidden) return;
+  els.settingsOverlay.hidden = true;
+  if (els.playScreen.classList.contains("is-active") && els.overlay.hidden) {
+    renderPlayHud();
+    syncFactsTimer();
+  }
+}
+
+function applyFastSeconds(value) {
+  const next = clampFastSeconds(value);
+  if (next === state.fastSeconds) {
+    syncSettingsForm();
+    return;
+  }
+  state.fastSeconds = next;
+  state.heldAtLevel = false;
+  state.slowRun = 0;
+  state.attemptsSinceBump = 0;
+  syncSettingsForm();
+  save();
+  if (els.playScreen.classList.contains("is-active")) renderPlayHud();
+}
+
+els.homeSettingsBtn.addEventListener("click", showSettings);
+els.settingsBtn.addEventListener("click", showSettings);
+els.settingsDoneBtn.addEventListener("click", hideSettings);
+els.settingsOverlay.addEventListener("click", (event) => {
+  if (event.target === els.settingsOverlay) hideSettings();
+});
+els.fastSlider.addEventListener("input", (event) => {
+  applyFastSeconds(event.target.value);
+});
 els.soundBtn.addEventListener("click", () => {
   state.sound = !state.sound;
   updateSoundButton();
@@ -735,15 +966,17 @@ function continueFromOverlay() {
   if (els.overlay.hidden) return;
   if (state.levelIndex < LEVELS.length - 1) {
     state.levelIndex += 1;
+    state.heldAtLevel = false;
+  } else {
+    state.heldAtLevel = true;
   }
-  state.mastery = 0;
   save();
   hideLevelOverlay();
 }
 
 function stayAtLevel() {
   if (els.overlay.hidden || els.overlayStay.hidden) return;
-  state.mastery = 0;
+  state.heldAtLevel = true;
   save();
   hideLevelOverlay();
 }
@@ -756,6 +989,13 @@ els.numpad.addEventListener("click", (event) => {
   handleKey(button.dataset.key);
 });
 window.addEventListener("keydown", (event) => {
+  if (!els.settingsOverlay.hidden) {
+    if (event.key === "Escape" || event.key === "Enter") {
+      event.preventDefault();
+      hideSettings();
+    }
+    return;
+  }
   if (els.factsWrap.classList.contains("is-open") && event.key === "Escape") {
     event.preventDefault();
     setFactsOpen(false);

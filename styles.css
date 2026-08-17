@@ -145,10 +145,16 @@ body {
 
 .play-top {
   display: grid;
-  grid-template-columns: 44px 1fr 44px;
+  grid-template-columns: 96px 1fr 96px;
   align-items: center;
   gap: 10px;
   margin-bottom: 18px;
+}
+
+.play-tools {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .icon-btn {
@@ -408,6 +414,10 @@ body {
   background: #d8f3ee;
 }
 
+.problem-card.is-slow {
+  background: #f8ead0;
+}
+
 .problem-card.is-wrong {
   background: #fde8e1;
   animation: shake 420ms ease;
@@ -521,6 +531,45 @@ body {
   font-size: 0.92rem;
   line-height: 1.4;
   color: var(--muted);
+}
+
+.setting {
+  text-align: left;
+  margin-bottom: 22px;
+}
+
+.setting-label {
+  display: block;
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+
+.overlay-card .setting-help {
+  margin: 0 0 14px;
+  font-size: 0.92rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.slider-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: var(--muted);
+}
+
+.slider-row input {
+  width: 100%;
+  accent-color: var(--teal);
+}
+
+.overlay-card .slider-value {
+  margin: 10px 0 0;
+  font-weight: 800;
+  text-align: center;
 }
 
 .btn-quiet {

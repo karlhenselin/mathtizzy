@@ -41,6 +41,7 @@
 
         <div class="home-actions">
           <button class="btn btn-primary" id="startBtn" type="button">Start practicing</button>
+          <button class="btn btn-ghost" id="homeSettingsBtn" type="button">Settings</button>
           <button class="btn btn-ghost" id="resetBtn" type="button" hidden>Reset progress</button>
         </div>
       </section>
@@ -52,7 +53,10 @@
             <p class="level-kicker" id="levelKicker">Level 1</p>
             <h2 class="level-name" id="levelName">Tiny Totals</h2>
           </div>
-          <button class="icon-btn" id="soundBtn" type="button" aria-label="Toggle sound" aria-pressed="true">♪</button>
+          <div class="play-tools">
+            <button class="icon-btn" id="settingsBtn" type="button" aria-label="Settings">⚙</button>
+            <button class="icon-btn" id="soundBtn" type="button" aria-label="Toggle sound" aria-pressed="true">♪</button>
+          </div>
         </header>
 
         <div class="progress-wrap">
@@ -68,8 +72,8 @@
                   <p class="facts-pop-title" id="factsPopTitle">Level facts</p>
                   <p class="facts-legend">
                     <span class="swatch swatch-new"></span> new
-                    <span class="swatch swatch-miss"></span> slow
-                    <span class="swatch swatch-solid"></span> fast
+                    <span class="swatch swatch-miss"></span> shaky
+                    <span class="swatch swatch-solid"></span> fluent
                   </p>
                 </div>
                 <div class="facts-maps" id="factsMaps"></div>
@@ -111,6 +115,26 @@
         </div>
       </section>
     </main>
+
+    <div class="overlay" id="settingsOverlay" hidden>
+      <div class="overlay-card" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+        <p class="eyebrow">Options</p>
+        <h2 id="settingsTitle">Settings</h2>
+        <div class="setting">
+          <label class="setting-label" for="fastSlider">Maximum time</label>
+          <p class="setting-help">A fact turns green when its average correct time is at or under this limit.</p>
+          <div class="slider-row">
+            <span>2s</span>
+            <input id="fastSlider" type="range" min="2" max="5" step="0.01" value="3" />
+            <span>5s</span>
+          </div>
+          <p class="slider-value" id="fastSliderValue">3 seconds</p>
+        </div>
+        <div class="overlay-actions">
+          <button class="btn btn-primary" id="settingsDoneBtn" type="button">Done</button>
+        </div>
+      </div>
+    </div>
 
     <div class="overlay" id="levelOverlay" hidden>
       <div class="overlay-card" role="dialog" aria-modal="true" aria-labelledby="overlayTitle">
