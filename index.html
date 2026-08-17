@@ -19,7 +19,7 @@
     <div class="bg-glow" aria-hidden="true"></div>
 
     <main class="app">
-      <section class="screen is-active" id="homeScreen" data-screen="home">
+      <section class="screen is-active" id="homeScreen">
         <p class="eyebrow">Math facts, leveled up</p>
         <h1 class="logo">Mathtizzy</h1>
         <p class="tagline">Start with tiny totals. Level up as you get faster and more accurate.</p>
@@ -46,7 +46,7 @@
         </div>
       </section>
 
-      <section class="screen" id="playScreen" data-screen="play">
+      <section class="screen" id="playScreen">
         <header class="play-top">
           <button class="icon-btn" id="homeBtn" type="button" aria-label="Back to home">←</button>
           <div class="level-meta">
@@ -85,11 +85,11 @@
         <div class="hud">
           <p>Streak <strong id="streakValue">0</strong></p>
           <p>Accuracy <strong id="accuracyValue">—</strong></p>
-          <p class="timer" id="timerHud" hidden>Time <strong id="timerValue">—</strong></p>
+          <p id="timerHud" hidden>Time <strong id="timerValue">—</strong></p>
         </div>
 
         <div class="problem-card" id="problemCard">
-          <p class="equation" id="equation" aria-live="polite">
+          <p class="equation" aria-live="polite">
             <span id="leftOperand">2</span>
             <span class="op" id="operator">+</span>
             <span id="rightOperand">2</span>

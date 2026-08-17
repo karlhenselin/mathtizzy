@@ -64,7 +64,6 @@ const state = {
   attempted: 0,
   sound: true,
   fastSeconds: FAST_SEC_DEFAULT,
-  finished: false,
   heldAtLevel: false,
   input: "",
   problem: null,
@@ -101,7 +100,6 @@ const els = {
   masteryLabel: document.getElementById("masteryLabel"),
   factsWrap: document.getElementById("factsWrap"),
   factsBtn: document.getElementById("factsBtn"),
-  factsPop: document.getElementById("factsPop"),
   factsPopTitle: document.getElementById("factsPopTitle"),
   factsMaps: document.getElementById("factsMaps"),
   streakValue: document.getElementById("streakValue"),
@@ -259,8 +257,8 @@ function levelMastery(level) {
   return { green, total, percent };
 }
 
-function pickWeightedFact(level, op) {
-  const pool = op ? getFactPool(level, op) : getLevelFacts(level);
+function pickWeightedFact(level) {
+  const pool = getLevelFacts(level);
   const eligible = pool.filter((fact) => !sameProblem(fact, state.problem));
   const use = eligible.length ? eligible : pool;
   let total = 0;
@@ -370,19 +368,15 @@ function mulMax(level) {
   return level.mulMax ?? level.max;
 }
 
-function makeProblem(level) {
-  return pickWeightedFact(level);
-}
-
 function generateProblem() {
   const level = currentLevel();
   const retry = takeDueRetry(level);
   if (retry) return retry;
 
-  let next = makeProblem(level);
+  let next = pickWeightedFact(level);
   for (let i = 0; i < 8; i += 1) {
     if (!sameProblem(next, state.problem)) break;
-    next = makeProblem(level);
+    next = pickWeightedFact(level);
   }
   if (isAddOrSub(next.op)) dequeueRetry(next);
   return next;
@@ -399,7 +393,6 @@ function save() {
       attempted: state.attempted,
       sound: state.sound,
       fastSeconds: state.fastSeconds,
-      finished: state.finished,
       heldAtLevel: state.heldAtLevel,
       slowRun: state.slowRun,
       attemptsSinceBump: state.attemptsSinceBump,
@@ -422,7 +415,6 @@ function load() {
       attempted: data.attempted ?? 0,
       sound: data.sound ?? true,
       fastSeconds: clampFastSeconds(data.fastSeconds ?? FAST_SEC_DEFAULT),
-      finished: data.finished ?? false,
       heldAtLevel: data.heldAtLevel ?? false,
       slowRun: Number(data.slowRun) || 0,
       attemptsSinceBump: Number(data.attemptsSinceBump) || 0,
@@ -553,7 +545,6 @@ function makeFactMap(level, op) {
       const cell = document.createElement("div");
       if (op === "-" && row < col) {
         cell.className = "fact-cell is-blank";
-        cell.title = "";
       } else {
         const fact =
           op === "÷"
@@ -735,7 +726,6 @@ function maybeLevelUp() {
   if (state.heldAtLevel) return;
 
   if (state.levelIndex >= LEVELS.length - 1) {
-    state.finished = true;
     showOverlay({
       eyebrow: "Champion",
       title: "You finished the ladder",
@@ -888,7 +878,6 @@ function resetProgress() {
     attempted: 0,
     sound: state.sound,
     fastSeconds: state.fastSeconds,
-    finished: false,
     heldAtLevel: false,
     slowRun: 0,
     attemptsSinceBump: 0,
