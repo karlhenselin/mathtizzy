@@ -19,10 +19,33 @@
     <div class="bg-glow" aria-hidden="true"></div>
 
     <main class="app">
-      <section class="screen is-active" id="homeScreen">
+      <section class="screen is-active" id="loginScreen">
+        <p class="eyebrow">Who's playing?</p>
+        <h1 class="logo">Mathtizzy</h1>
+        <p class="tagline">Tap your name, or type a new one to start.</p>
+
+        <div class="user-list" id="userList" hidden></div>
+
+        <form class="login-form" id="loginForm">
+          <label class="visually-hidden" for="userNameInput">Your name</label>
+          <input
+            class="name-input"
+            id="userNameInput"
+            type="text"
+            maxlength="18"
+            autocomplete="off"
+            autocorrect="off"
+            spellcheck="false"
+            placeholder="Type your name"
+          />
+          <button class="btn btn-primary" type="submit">That's me</button>
+        </form>
+      </section>
+
+      <section class="screen" id="homeScreen">
         <p class="eyebrow">Math facts, leveled up</p>
         <h1 class="logo">Mathtizzy</h1>
-        <p class="tagline">Start with tiny totals. Level up as you get faster and more accurate.</p>
+        <p class="tagline" id="homeTagline">Start with tiny totals. Level up as you get faster and more accurate.</p>
 
         <div class="home-stats" id="homeStats" hidden>
           <div>
@@ -42,6 +65,7 @@
         <div class="home-actions">
           <button class="btn btn-primary" id="startBtn" type="button">Start practicing</button>
           <button class="btn btn-ghost" id="homeSettingsBtn" type="button">Settings</button>
+          <button class="btn btn-ghost" id="switchUserBtn" type="button">Switch player</button>
           <button class="btn btn-ghost" id="resetBtn" type="button" hidden>Reset progress</button>
         </div>
       </section>
@@ -153,7 +177,7 @@
       <div class="overlay-card" role="dialog" aria-modal="true" aria-labelledby="resetTitle">
         <p class="eyebrow">Hold on</p>
         <h2 id="resetTitle">Reset progress?</h2>
-        <p>This clears your level, streak, solved count, and missed-fact review. You will start over at Tiny Totals.</p>
+        <p>This clears <span id="resetUserName">this player</span>'s level, streak, solved count, and missed-fact review. Other players are left alone. They will start over at Tiny Totals.</p>
         <div class="overlay-actions">
           <button class="btn btn-primary" id="resetCancelBtn" type="button">Keep my progress</button>
           <button class="btn btn-danger" id="resetConfirmBtn" type="button">Reset everything</button>

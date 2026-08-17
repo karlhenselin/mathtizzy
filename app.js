@@ -1,4 +1,6 @@
 const STORAGE_KEY = "mathtizzy-progress";
+const USERS_KEY = "mathtizzy-users";
+const NAME_MAX = 18;
 const FACT_RETRY_AFTER = 2;
 const FAST_SEC_MIN = 2;
 const FAST_SEC_MAX = 5;
@@ -57,6 +59,8 @@ const SLOW_NOTES = [
 ];
 
 const state = {
+  userId: null,
+  userName: "",
   levelIndex: 0,
   streak: 0,
   bestStreak: 0,
@@ -81,8 +85,13 @@ const state = {
 };
 
 const els = {
+  loginScreen: document.getElementById("loginScreen"),
+  userList: document.getElementById("userList"),
+  loginForm: document.getElementById("loginForm"),
+  userNameInput: document.getElementById("userNameInput"),
   homeScreen: document.getElementById("homeScreen"),
   playScreen: document.getElementById("playScreen"),
+  homeTagline: document.getElementById("homeTagline"),
   homeStats: document.getElementById("homeStats"),
   homeLevel: document.getElementById("homeLevel"),
   homeStreak: document.getElementById("homeStreak"),
@@ -90,6 +99,7 @@ const els = {
   startBtn: document.getElementById("startBtn"),
   resetBtn: document.getElementById("resetBtn"),
   homeSettingsBtn: document.getElementById("homeSettingsBtn"),
+  switchUserBtn: document.getElementById("switchUserBtn"),
   homeBtn: document.getElementById("homeBtn"),
   settingsBtn: document.getElementById("settingsBtn"),
   soundBtn: document.getElementById("soundBtn"),
@@ -123,6 +133,7 @@ const els = {
   resetOverlay: document.getElementById("resetOverlay"),
   resetCancelBtn: document.getElementById("resetCancelBtn"),
   resetConfirmBtn: document.getElementById("resetConfirmBtn"),
+  resetUserName: document.getElementById("resetUserName"),
   settingsOverlay: document.getElementById("settingsOverlay"),
   fastSlider: document.getElementById("fastSlider"),
   fastSliderValue: document.getElementById("fastSliderValue"),
@@ -382,53 +393,210 @@ function generateProblem() {
   return next;
 }
 
-function save() {
-  localStorage.setItem(
-    STORAGE_KEY,
-    JSON.stringify({
-      levelIndex: state.levelIndex,
-      streak: state.streak,
-      bestStreak: state.bestStreak,
-      correct: state.correct,
-      attempted: state.attempted,
-      sound: state.sound,
-      fastSeconds: state.fastSeconds,
-      heldAtLevel: state.heldAtLevel,
-      slowRun: state.slowRun,
-      attemptsSinceBump: state.attemptsSinceBump,
-      factScores: state.factScores,
-      retrySoon: state.retrySoon,
-    })
-  );
+function progressKey(userId) {
+  return `${STORAGE_KEY}:${userId}`;
 }
 
-function load() {
+function makeUserId() {
+  if (crypto.randomUUID) return crypto.randomUUID();
+  return `u${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function normalizeName(raw) {
+  return String(raw || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, NAME_MAX);
+}
+
+function namesMatch(left, right) {
+  return left.toLowerCase() === right.toLowerCase();
+}
+
+function freshProgress() {
+  return {
+    levelIndex: 0,
+    streak: 0,
+    bestStreak: 0,
+    correct: 0,
+    attempted: 0,
+    sound: true,
+    fastSeconds: FAST_SEC_DEFAULT,
+    heldAtLevel: false,
+    slowRun: 0,
+    attemptsSinceBump: 0,
+    factScores: {},
+    retrySoon: [],
+  };
+}
+
+function clearSession() {
+  clearTimer();
+  Object.assign(state, {
+    input: "",
+    problem: null,
+    locked: false,
+    remaining: null,
+    timerPaused: false,
+    pausedAt: 0,
+    lastPraise: "",
+    shownAt: 0,
+  });
+}
+
+function applyProgress(data = {}) {
+  const defaults = freshProgress();
+  Object.assign(state, defaults, {
+    levelIndex: data.levelIndex ?? 0,
+    streak: data.streak ?? 0,
+    bestStreak: data.bestStreak ?? 0,
+    correct: data.correct ?? 0,
+    attempted: data.attempted ?? 0,
+    sound: data.sound ?? true,
+    fastSeconds: clampFastSeconds(data.fastSeconds ?? FAST_SEC_DEFAULT),
+    heldAtLevel: data.heldAtLevel ?? false,
+    slowRun: Number(data.slowRun) || 0,
+    attemptsSinceBump: Number(data.attemptsSinceBump) || 0,
+    factScores: normalizeFactScores(data.factScores),
+    retrySoon: Array.isArray(data.retrySoon) ? data.retrySoon : [],
+  });
+  clearSession();
+}
+
+function readUsers() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return;
+    const raw = localStorage.getItem(USERS_KEY);
+    if (!raw) return [];
     const data = JSON.parse(raw);
-    Object.assign(state, {
-      levelIndex: data.levelIndex ?? 0,
-      streak: data.streak ?? 0,
-      bestStreak: data.bestStreak ?? 0,
-      correct: data.correct ?? 0,
-      attempted: data.attempted ?? 0,
-      sound: data.sound ?? true,
-      fastSeconds: clampFastSeconds(data.fastSeconds ?? FAST_SEC_DEFAULT),
-      heldAtLevel: data.heldAtLevel ?? false,
-      slowRun: Number(data.slowRun) || 0,
-      attemptsSinceBump: Number(data.attemptsSinceBump) || 0,
-      factScores: normalizeFactScores(data.factScores),
-      retrySoon: Array.isArray(data.retrySoon) ? data.retrySoon : [],
-    });
+    const list = Array.isArray(data) ? data : data.users;
+    if (!Array.isArray(list)) return [];
+    return list
+      .filter((user) => user && user.id && user.name)
+      .map((user) => ({ id: String(user.id), name: normalizeName(user.name) }))
+      .filter((user) => user.name);
   } catch {
-    /* ignore broken saves */
+    return [];
   }
 }
 
+function writeUsers(users) {
+  localStorage.setItem(USERS_KEY, JSON.stringify(users));
+}
+
+function readProgress(userId) {
+  try {
+    const raw = localStorage.getItem(progressKey(userId));
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function takeLegacyProgress() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    localStorage.removeItem(STORAGE_KEY);
+    return data && typeof data === "object" ? data : null;
+  } catch {
+    localStorage.removeItem(STORAGE_KEY);
+    return null;
+  }
+}
+
+function progressSnapshot() {
+  return {
+    levelIndex: state.levelIndex,
+    streak: state.streak,
+    bestStreak: state.bestStreak,
+    correct: state.correct,
+    attempted: state.attempted,
+    sound: state.sound,
+    fastSeconds: state.fastSeconds,
+    heldAtLevel: state.heldAtLevel,
+    slowRun: state.slowRun,
+    attemptsSinceBump: state.attemptsSinceBump,
+    factScores: state.factScores,
+    retrySoon: state.retrySoon,
+  };
+}
+
+function save() {
+  if (!state.userId) return;
+  localStorage.setItem(progressKey(state.userId), JSON.stringify(progressSnapshot()));
+}
+
 function showScreen(name) {
+  els.loginScreen.classList.toggle("is-active", name === "login");
   els.homeScreen.classList.toggle("is-active", name === "home");
   els.playScreen.classList.toggle("is-active", name === "play");
+}
+
+function userSummary(user) {
+  const progress = readProgress(user.id) ?? freshProgress();
+  const level = LEVELS[Math.min(progress.levelIndex ?? 0, LEVELS.length - 1)];
+  const solved = progress.correct ?? 0;
+  if (!solved && !progress.levelIndex) return "New player";
+  return `${level.name} · ${solved} solved`;
+}
+
+function renderLogin() {
+  const users = readUsers();
+  els.userList.hidden = !users.length;
+  els.userList.replaceChildren(
+    ...users.map((user) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "user-btn";
+      button.dataset.userId = user.id;
+      const name = document.createElement("strong");
+      name.textContent = user.name;
+      const meta = document.createElement("span");
+      meta.textContent = userSummary(user);
+      button.append(name, meta);
+      return button;
+    })
+  );
+  els.userNameInput.value = "";
+}
+
+function loginAs(user, progress) {
+  state.userId = user.id;
+  state.userName = user.name;
+  applyProgress(progress ?? readProgress(user.id) ?? {});
+  renderHome();
+  showScreen("home");
+}
+
+function loginFromName(raw) {
+  const name = normalizeName(raw);
+  if (!name) {
+    els.userNameInput.focus();
+    return;
+  }
+  const users = readUsers();
+  const existing = users.find((user) => namesMatch(user.name, name));
+  if (existing) {
+    loginAs(existing);
+    return;
+  }
+  const user = { id: makeUserId(), name };
+  const legacy = users.length ? null : takeLegacyProgress();
+  writeUsers([...users, user]);
+  if (legacy) localStorage.setItem(progressKey(user.id), JSON.stringify(legacy));
+  loginAs(user, legacy);
+}
+
+function switchUser() {
+  save();
+  clearSession();
+  state.userId = null;
+  state.userName = "";
+  renderLogin();
+  showScreen("login");
+  els.userNameInput.focus();
 }
 
 function accuracyText() {
@@ -438,12 +606,16 @@ function accuracyText() {
 
 function renderHome() {
   const hasProgress = state.attempted > 0 || state.levelIndex > 0;
+  els.homeTagline.textContent = state.userName
+    ? `Hi, ${state.userName}. Start with tiny totals. Level up as you get faster and more accurate.`
+    : "Start with tiny totals. Level up as you get faster and more accurate.";
   els.homeStats.hidden = !hasProgress;
   els.resetBtn.hidden = !hasProgress;
   els.homeLevel.textContent = String(Math.min(state.levelIndex + 1, LEVELS.length));
   els.homeStreak.textContent = String(state.bestStreak);
   els.homeSolved.textContent = String(state.correct);
   els.startBtn.textContent = hasProgress ? "Continue practicing" : "Start practicing";
+  els.resetUserName.textContent = state.userName || "this player";
   updateSoundButton();
 }
 
@@ -829,6 +1001,17 @@ function startPlay() {
 }
 
 els.startBtn.addEventListener("click", startPlay);
+els.switchUserBtn.addEventListener("click", switchUser);
+els.userList.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-user-id]");
+  if (!button) return;
+  const user = readUsers().find((item) => item.id === button.dataset.userId);
+  if (user) loginAs(user);
+});
+els.loginForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  loginFromName(els.userNameInput.value);
+});
 els.homeBtn.addEventListener("click", () => {
   clearTimer();
   showScreen("home");
@@ -869,21 +1052,10 @@ function hideResetConfirm() {
 }
 
 function resetProgress() {
-  localStorage.removeItem(STORAGE_KEY);
-  Object.assign(state, {
-    levelIndex: 0,
-    streak: 0,
-    bestStreak: 0,
-    correct: 0,
-    attempted: 0,
-    sound: state.sound,
-    fastSeconds: state.fastSeconds,
-    heldAtLevel: false,
-    slowRun: 0,
-    attemptsSinceBump: 0,
-    factScores: {},
-    retrySoon: [],
-  });
+  const sound = state.sound;
+  const fastSeconds = state.fastSeconds;
+  applyProgress({ ...freshProgress(), sound, fastSeconds });
+  save();
   hideResetConfirm();
   renderHome();
 }
@@ -1010,6 +1182,7 @@ window.addEventListener("keydown", (event) => {
     }
     return;
   }
+  if (!els.playScreen.classList.contains("is-active")) return;
   if (event.key >= "0" && event.key <= "9") handleKey(event.key);
   else if (event.key === "Backspace") {
     event.preventDefault();
@@ -1020,5 +1193,5 @@ window.addEventListener("keydown", (event) => {
   }
 });
 
-load();
-renderHome();
+renderLogin();
+showScreen("login");

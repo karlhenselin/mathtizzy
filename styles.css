@@ -83,6 +83,82 @@ body {
   color: #d7ebe8;
 }
 
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.user-list {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 22px;
+}
+
+.user-btn {
+  appearance: none;
+  width: 100%;
+  text-align: left;
+  border: 1px solid rgba(244, 239, 230, 0.18);
+  background: rgba(244, 239, 230, 0.1);
+  color: var(--cream);
+  border-radius: 16px;
+  padding: 12px 16px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.user-btn:hover,
+.user-btn:focus-visible {
+  background: rgba(244, 239, 230, 0.18);
+}
+
+.user-btn strong {
+  display: block;
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 1.25rem;
+}
+
+.user-btn span {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.82rem;
+  color: #b7d4d1;
+}
+
+.login-form {
+  display: grid;
+  gap: 10px;
+}
+
+.name-input {
+  width: 100%;
+  border: 1px solid rgba(244, 239, 230, 0.28);
+  background: rgba(244, 239, 230, 0.1);
+  color: var(--cream);
+  border-radius: 16px;
+  padding: 14px 16px;
+  font: inherit;
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+.name-input::placeholder {
+  color: #9bbfbb;
+  font-weight: 700;
+}
+
+.name-input:focus {
+  outline: 2px solid var(--sand);
+  outline-offset: 2px;
+}
+
 .home-stats {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
