@@ -91,7 +91,7 @@ const els = {
   userNameInput: document.getElementById("userNameInput"),
   homeScreen: document.getElementById("homeScreen"),
   playScreen: document.getElementById("playScreen"),
-  homeTagline: document.getElementById("homeTagline"),
+  homeEyebrow: document.getElementById("homeEyebrow"),
   homeStats: document.getElementById("homeStats"),
   homeLevel: document.getElementById("homeLevel"),
   homeStreak: document.getElementById("homeStreak"),
@@ -604,11 +604,14 @@ function accuracyText() {
   return `${Math.round((state.correct / state.attempted) * 100)}%`;
 }
 
+function playerLevelLabel() {
+  const levelNo = Math.min(state.levelIndex + 1, LEVELS.length);
+  return state.userName ? `${state.userName} Level ${levelNo}` : `Level ${levelNo}`;
+}
+
 function renderHome() {
   const hasProgress = state.attempted > 0 || state.levelIndex > 0;
-  els.homeTagline.textContent = state.userName
-    ? `Hi, ${state.userName}. Start with tiny totals. Level up as you get faster and more accurate.`
-    : "Start with tiny totals. Level up as you get faster and more accurate.";
+  els.homeEyebrow.textContent = playerLevelLabel();
   els.homeStats.hidden = !hasProgress;
   els.resetBtn.hidden = !hasProgress;
   els.homeLevel.textContent = String(Math.min(state.levelIndex + 1, LEVELS.length));
@@ -627,7 +630,7 @@ function updateSoundButton() {
 function renderPlayHud() {
   const level = currentLevel();
   const { green, total, percent } = levelMastery(level);
-  els.levelKicker.textContent = state.levelIndex >= LEVELS.length - 1 ? "Final level" : `Level ${state.levelIndex + 1}`;
+  els.levelKicker.textContent = playerLevelLabel();
   els.levelName.textContent = level.name;
   els.masteryFill.style.width = `${percent}%`;
   els.masteryBar.setAttribute("aria-valuenow", String(percent));
