@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0d3b3e" />
+    <meta name="description" content="Practice math facts that start easy and get tougher as you improve." />
+    <title>Mathtizzy — Math Facts Practice</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Nunito:wght@500;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>×</text></svg>" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="bg-glow" aria-hidden="true"></div>
+
+    <main class="app">
+      <section class="screen is-active" id="homeScreen" data-screen="home">
+        <p class="eyebrow">Math facts, leveled up</p>
+        <h1 class="logo">Mathtizzy</h1>
+        <p class="tagline">Start with tiny totals. Level up as you get faster and more accurate.</p>
+
+        <div class="home-stats" id="homeStats" hidden>
+          <div>
+            <span class="stat-label">Level</span>
+            <strong id="homeLevel">1</strong>
+          </div>
+          <div>
+            <span class="stat-label">Best streak</span>
+            <strong id="homeStreak">0</strong>
+          </div>
+          <div>
+            <span class="stat-label">Solved</span>
+            <strong id="homeSolved">0</strong>
+          </div>
+        </div>
+
+        <div class="home-actions">
+          <button class="btn btn-primary" id="startBtn" type="button">Start practicing</button>
+          <button class="btn btn-ghost" id="resetBtn" type="button" hidden>Reset progress</button>
+        </div>
+      </section>
+
+      <section class="screen" id="playScreen" data-screen="play">
+        <header class="play-top">
+          <button class="icon-btn" id="homeBtn" type="button" aria-label="Back to home">←</button>
+          <div class="level-meta">
+            <p class="level-kicker" id="levelKicker">Level 1</p>
+            <h2 class="level-name" id="levelName">Tiny Totals</h2>
+          </div>
+          <button class="icon-btn" id="soundBtn" type="button" aria-label="Toggle sound" aria-pressed="true">♪</button>
+        </header>
+
+        <div class="progress-wrap">
+          <div class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="masteryBar">
+            <span class="progress-fill" id="masteryFill"></span>
+          </div>
+          <div class="progress-meta">
+            <p class="progress-label" id="masteryLabel">Mastery 0%</p>
+            <div class="facts-wrap" id="factsWrap">
+              <button class="facts-btn" id="factsBtn" type="button" aria-expanded="false" aria-controls="factsPop">Facts</button>
+              <div class="facts-pop" id="factsPop" role="tooltip">
+                <div class="facts-pop-head">
+                  <p class="facts-pop-title" id="factsPopTitle">Level facts</p>
+                  <p class="facts-legend">
+                    <span class="swatch swatch-new"></span> new
+                    <span class="swatch swatch-miss"></span> slow
+                    <span class="swatch swatch-solid"></span> fast
+                  </p>
+                </div>
+                <div class="facts-maps" id="factsMaps"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="hud">
+          <p>Streak <strong id="streakValue">0</strong></p>
+          <p>Accuracy <strong id="accuracyValue">—</strong></p>
+          <p class="timer" id="timerHud" hidden>Time <strong id="timerValue">—</strong></p>
+        </div>
+
+        <div class="problem-card" id="problemCard">
+          <p class="equation" id="equation" aria-live="polite">
+            <span id="leftOperand">2</span>
+            <span class="op" id="operator">+</span>
+            <span id="rightOperand">2</span>
+            <span class="op">=</span>
+            <span class="answer-slot" id="answerSlot">?</span>
+          </p>
+          <p class="feedback" id="feedback" aria-live="assertive"></p>
+        </div>
+
+        <div class="pad" id="numpad">
+          <button type="button" data-key="7">7</button>
+          <button type="button" data-key="8">8</button>
+          <button type="button" data-key="9">9</button>
+          <button type="button" data-key="4">4</button>
+          <button type="button" data-key="5">5</button>
+          <button type="button" data-key="6">6</button>
+          <button type="button" data-key="1">1</button>
+          <button type="button" data-key="2">2</button>
+          <button type="button" data-key="3">3</button>
+          <button type="button" data-key="back" class="pad-util" aria-label="Backspace">⌫</button>
+          <button type="button" data-key="0">0</button>
+          <button type="button" data-key="enter" class="pad-enter" aria-label="Check answer">✓</button>
+        </div>
+      </section>
+    </main>
+
+    <div class="overlay" id="levelOverlay" hidden>
+      <div class="overlay-card" role="dialog" aria-modal="true" aria-labelledby="overlayTitle">
+        <p class="eyebrow" id="overlayEyebrow">Mastered</p>
+        <h2 id="overlayTitle">Next level</h2>
+        <p id="overlayBlurb">Keep practicing to unlock harder facts.</p>
+        <div class="overlay-actions">
+          <button class="btn btn-primary" id="overlayContinue" type="button">Level up</button>
+          <p class="overlay-stay-note" id="overlayStayNote" hidden></p>
+          <button class="btn btn-quiet" id="overlayStay" type="button">Stay here</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="overlay" id="resetOverlay" hidden>
+      <div class="overlay-card" role="dialog" aria-modal="true" aria-labelledby="resetTitle">
+        <p class="eyebrow">Hold on</p>
+        <h2 id="resetTitle">Reset progress?</h2>
+        <p>This clears your level, streak, solved count, and missed-fact review. You will start over at Tiny Totals.</p>
+        <div class="overlay-actions">
+          <button class="btn btn-primary" id="resetCancelBtn" type="button">Keep my progress</button>
+          <button class="btn btn-danger" id="resetConfirmBtn" type="button">Reset everything</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="app.js" defer></script>
+  </body>
+</html>
