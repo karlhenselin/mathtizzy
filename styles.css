@@ -596,6 +596,7 @@ body {
   place-items: center;
   padding: 24px;
   z-index: 5;
+  overflow: auto;
 }
 
 .overlay-card {
@@ -644,6 +645,10 @@ body {
   margin-bottom: 4px;
 }
 
+.setting-label-sub {
+  margin-top: 16px;
+}
+
 .overlay-card .setting-help {
   margin: 0 0 14px;
   font-size: 0.92rem;
@@ -670,6 +675,98 @@ body {
   margin: 10px 0 0;
   font-weight: 800;
   text-align: center;
+}
+
+.song-dropdown {
+  position: relative;
+  z-index: 1;
+}
+
+.song-dropdown-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 2px;
+  padding: 10px 12px;
+  border: 1px solid rgba(29, 43, 44, 0.18);
+  border-radius: 12px;
+  font: inherit;
+  font-weight: 800;
+  color: var(--ink);
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.song-dropdown-toggle::after {
+  content: "▾";
+  color: var(--muted);
+  font-size: 0.9em;
+}
+
+.song-dropdown.is-open .song-dropdown-toggle::after {
+  content: "▴";
+}
+
+.song-list {
+  display: none;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 6;
+  max-height: 220px;
+  overflow: auto;
+  padding: 6px;
+  gap: 4px;
+  border: 1px solid rgba(29, 43, 44, 0.18);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 12px 28px rgba(6, 22, 24, 0.18);
+}
+
+.song-dropdown.is-open .song-list {
+  display: grid;
+}
+
+.song-option {
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 10px;
+  font: inherit;
+  font-weight: 800;
+  color: var(--ink);
+  background: transparent;
+  cursor: pointer;
+}
+
+.song-option:hover {
+  background: rgba(42, 157, 143, 0.12);
+}
+
+.song-option.is-selected {
+  background: var(--teal);
+  color: #fff;
+}
+
+.settings-credit {
+  margin: 0 0 18px;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+.settings-credit a {
+  color: var(--teal);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.settings-credit a:hover {
+  text-decoration: underline;
 }
 
 .btn-quiet {

@@ -13,7 +13,7 @@
       rel="stylesheet"
     />
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>×</text></svg>" />
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="styles.css?v=2" />
   </head>
   <body>
     <div class="bg-glow" aria-hidden="true"></div>
@@ -154,6 +154,32 @@
           </div>
           <p class="slider-value" id="fastSliderValue">3.5 seconds</p>
         </div>
+        <div class="setting">
+          <label class="setting-label" id="songListLabel">Music</label>
+          <p class="setting-help">Each practice session starts with a random track unless you pick one.</p>
+          <div class="song-dropdown" id="songDropdown">
+            <button
+              type="button"
+              class="song-dropdown-toggle"
+              id="songDropdownBtn"
+              aria-haspopup="listbox"
+              aria-expanded="false"
+              aria-labelledby="songListLabel"
+            ></button>
+            <div class="song-list" id="songList" role="listbox" hidden></div>
+          </div>
+          <label class="setting-label setting-label-sub" for="musicSlider">Music volume</label>
+          <div class="slider-row">
+            <span>0%</span>
+            <input id="musicSlider" type="range" min="0" max="100" step="1" value="70" />
+            <span>100%</span>
+          </div>
+          <p class="slider-value" id="musicSliderValue">70%</p>
+        </div>
+        <p class="settings-credit">
+          Music by
+          <a href="https://www.fesliyanstudios.com/" target="_blank" rel="noopener noreferrer">Fesliyan Studios</a>
+        </p>
         <div class="overlay-actions">
           <button class="btn btn-primary" id="settingsDoneBtn" type="button">Done</button>
         </div>
@@ -185,6 +211,12 @@
       </div>
     </div>
 
-    <script src="app.js" defer></script>
+    <audio
+      id="bgMusic"
+      src=""
+      loop
+      preload="auto"
+    ></audio>
+    <script src="app.js?v=2" defer></script>
   </body>
 </html>

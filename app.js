@@ -5,6 +5,7 @@ const FACT_RETRY_AFTER = 2;
 const FAST_SEC_MIN = 1.5;
 const FAST_SEC_MAX = 8;
 const FAST_SEC_DEFAULT = 3.5;
+const MUSIC_VOL_DEFAULT = 0.7;
 const FACT_GREEN_RATIO = 5;
 const WHITE_WEIGHT = 12;
 const GREEN_WEIGHT = 0.06;
@@ -19,6 +20,17 @@ const SLOW_NEAR_RATIO = 0.9;
 const FACT_RED = [231, 111, 81];
 const FACT_MID = [244, 208, 96];
 const FACT_GREEN = [42, 157, 143];
+const SONG_RANDOM = "random";
+const SONGS = [
+  { id: "retro", name: "Retro Platforming", file: "music/2019-12-11_-_Retro_Platforming_-_David_Fesliyan.mp3" },
+  { id: "boss", name: "Boss Time", file: "music/2021-08-30_-_Boss_Time_-_www.FesliyanStudios.com.mp3" },
+  { id: "adventure", name: "8-Bit Adventure", file: "music/fast-2021-08-16_-_8_Bit_Adventure_-_www.FesliyanStudios.com.mp3" },
+  { id: "funk", name: "8-Bit Retro Funk", file: "music/2020-06-18_-_8_Bit_Retro_Funk_-_www.FesliyanStudios.com_David_Renda.mp3" },
+  { id: "heart", name: "Beating Heart", file: "music/2019-09-29_-_Beating_Heart_-_FesliyanStudios.com_-_David_Renda.mp3" },
+  { id: "feels", name: "Feels Good", file: "music/2019-10-21_-_Feels_Good_-_David_Fesliyan.mp3" },
+  { id: "lasers", name: "Dodging Lasers", file: "music/2022-09-09_-_Dodging_Lasers_-_www.FesliyanStudios.com.mp3" },
+  { id: "bass", name: "Bass Addict", file: "music/2022-09-09_-_Bass_Addict_-_www.FesliyanStudios.com.mp3" },
+];
 const OP_TITLES = { "+": "Addition", "-": "Subtraction", "×": "Multiplication", "÷": "Division" };
 const OP_WORDS = { "+": "plus", "-": "minus", "×": "times", "÷": "divided by" };
 const ONES_WORDS = [
@@ -99,6 +111,9 @@ const state = {
   correct: 0,
   attempted: 0,
   sound: true,
+  songId: SONG_RANDOM,
+  playingSongId: null,
+  musicVolume: MUSIC_VOL_DEFAULT,
   fastSeconds: FAST_SEC_DEFAULT,
   heldAtLevel: false,
   input: "",
@@ -116,6 +131,7 @@ const state = {
   retrySoon: [],
   readTimers: [],
   gradeTimeoutId: null,
+  wrongTimeoutId: null,
 };
 
 const els = {
@@ -136,6 +152,10 @@ const els = {
   homeBtn: document.getElementById("homeBtn"),
   settingsBtn: document.getElementById("settingsBtn"),
   soundBtn: document.getElementById("soundBtn"),
+  bgMusic: document.getElementById("bgMusic"),
+  songDropdown: document.getElementById("songDropdown"),
+  songDropdownBtn: document.getElementById("songDropdownBtn"),
+  songList: document.getElementById("songList"),
   levelKicker: document.getElementById("levelKicker"),
   levelName: document.getElementById("levelName"),
   masteryBar: document.getElementById("masteryBar"),
@@ -170,6 +190,8 @@ const els = {
   settingsOverlay: document.getElementById("settingsOverlay"),
   fastSlider: document.getElementById("fastSlider"),
   fastSliderValue: document.getElementById("fastSliderValue"),
+  musicSlider: document.getElementById("musicSlider"),
+  musicSliderValue: document.getElementById("musicSliderValue"),
   settingsDoneBtn: document.getElementById("settingsDoneBtn"),
 };
 
@@ -177,6 +199,17 @@ function clampFastSeconds(value) {
   const n = Number(value);
   if (!Number.isFinite(n)) return FAST_SEC_DEFAULT;
   return Math.min(FAST_SEC_MAX, Math.max(FAST_SEC_MIN, Math.round(n * 100) / 100));
+}
+
+function clampSongId(id) {
+  if (id === SONG_RANDOM || SONGS.some((song) => song.id === id)) return id;
+  return SONG_RANDOM;
+}
+
+function clampMusicVolume(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return MUSIC_VOL_DEFAULT;
+  return Math.min(1, Math.max(0, Math.round(n * 100) / 100));
 }
 
 function formatSeconds(seconds) {
@@ -471,6 +504,8 @@ function freshProgress() {
     correct: 0,
     attempted: 0,
     sound: true,
+    songId: SONG_RANDOM,
+    musicVolume: MUSIC_VOL_DEFAULT,
     fastSeconds: FAST_SEC_DEFAULT,
     heldAtLevel: false,
     slowRun: 0,
@@ -482,6 +517,7 @@ function freshProgress() {
 
 function clearSession() {
   clearTimer();
+  clearWrongTimeout();
   clearGradeTimeout();
   clearFactRead();
   Object.assign(state, {
@@ -493,6 +529,7 @@ function clearSession() {
     pausedAt: 0,
     lastPraise: "",
     shownAt: 0,
+    playingSongId: null,
   });
 }
 
@@ -505,6 +542,8 @@ function applyProgress(data = {}) {
     correct: data.correct ?? 0,
     attempted: data.attempted ?? 0,
     sound: data.sound ?? true,
+    songId: clampSongId(data.songId),
+    musicVolume: clampMusicVolume(data.musicVolume ?? MUSIC_VOL_DEFAULT),
     fastSeconds: clampFastSeconds(data.fastSeconds ?? FAST_SEC_DEFAULT),
     heldAtLevel: data.heldAtLevel ?? false,
     slowRun: Number(data.slowRun) || 0,
@@ -566,6 +605,8 @@ function progressSnapshot() {
     correct: state.correct,
     attempted: state.attempted,
     sound: state.sound,
+    songId: state.songId,
+    musicVolume: state.musicVolume,
     fastSeconds: state.fastSeconds,
     heldAtLevel: state.heldAtLevel,
     slowRun: state.slowRun,
@@ -584,6 +625,7 @@ function showScreen(name) {
   els.loginScreen.classList.toggle("is-active", name === "login");
   els.homeScreen.classList.toggle("is-active", name === "home");
   els.playScreen.classList.toggle("is-active", name === "play");
+  syncBgMusic();
 }
 
 function userSummary(user) {
@@ -678,6 +720,96 @@ function renderHome() {
 function updateSoundButton() {
   els.soundBtn.setAttribute("aria-pressed", String(state.sound));
   els.soundBtn.textContent = state.sound ? "♪" : "🔇";
+  syncBgMusic();
+}
+
+function syncBgMusic() {
+  if (!els.bgMusic) return;
+  els.bgMusic.volume = state.musicVolume;
+  const onPlay = els.playScreen.classList.contains("is-active");
+  const settingsOpen = !els.settingsOverlay.hidden;
+  const overlayUp = !els.resetOverlay.hidden || !els.overlay.hidden || factsPopOpen();
+  const shouldPlay = state.sound && (settingsOpen || (onPlay && !state.timerPaused && !overlayUp));
+  if (shouldPlay) {
+    const play = els.bgMusic.play();
+    if (play && typeof play.catch === "function") play.catch(() => {});
+  } else {
+    els.bgMusic.pause();
+  }
+}
+
+function songById(id) {
+  return SONGS.find((song) => song.id === id) || SONGS[0];
+}
+
+function pickRandomSongId(avoidId) {
+  const pool = SONGS.filter((song) => song.id !== avoidId);
+  return pick(pool.length ? pool : SONGS).id;
+}
+
+function loadSong(id) {
+  const song = songById(id);
+  if (state.playingSongId === song.id && els.bgMusic.getAttribute("src") === encodeURI(song.file)) {
+    els.bgMusic.currentTime = 0;
+    return;
+  }
+  els.bgMusic.src = encodeURI(song.file);
+  els.bgMusic.load();
+  state.playingSongId = song.id;
+}
+
+function chooseStartSong() {
+  const id = state.songId === SONG_RANDOM ? pickRandomSongId(state.playingSongId) : state.songId;
+  loadSong(id);
+}
+
+function applySongSetting(id) {
+  state.songId = clampSongId(id);
+  if (state.songId === SONG_RANDOM) loadSong(pickRandomSongId(state.playingSongId));
+  else loadSong(state.songId);
+  save();
+  syncSongList();
+  syncBgMusic();
+}
+
+function songLabel(id) {
+  if (id === SONG_RANDOM) return "Random each session";
+  return songById(id).name;
+}
+
+function songMenuOpen() {
+  return els.songDropdown.classList.contains("is-open");
+}
+
+function setSongMenuOpen(open) {
+  els.songDropdown.classList.toggle("is-open", open);
+  els.songDropdownBtn.setAttribute("aria-expanded", String(open));
+  els.songList.hidden = !open;
+}
+
+function fillSongList() {
+  const options = [{ id: SONG_RANDOM, name: "Random each session" }, ...SONGS];
+  els.songList.replaceChildren(
+    ...options.map((song) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "song-option";
+      button.dataset.songId = song.id;
+      button.setAttribute("role", "option");
+      button.textContent = song.name;
+      return button;
+    })
+  );
+  syncSongList();
+}
+
+function syncSongList() {
+  els.songDropdownBtn.textContent = songLabel(state.songId);
+  els.songList.querySelectorAll(".song-option").forEach((button) => {
+    const selected = button.dataset.songId === state.songId;
+    button.classList.toggle("is-selected", selected);
+    button.setAttribute("aria-selected", String(selected));
+  });
 }
 
 function renderPlayHud() {
@@ -926,6 +1058,46 @@ function clearTimer() {
   }
 }
 
+function clearWrongTimeout() {
+  if (state.wrongTimeoutId) {
+    window.clearTimeout(state.wrongTimeoutId);
+    state.wrongTimeoutId = null;
+  }
+}
+
+function problemDeadlineMs() {
+  const level = currentLevel();
+  return (level.timeLimit ?? state.fastSeconds) * 1000;
+}
+
+function inputIsFinishedWrong() {
+  if (!state.problem || !state.input) return false;
+  if (Number(state.input) === state.problem.answer) return false;
+  return !String(state.problem.answer).startsWith(state.input);
+}
+
+function maybeGradeOvertimeWrong() {
+  if (state.locked || !inputIsFinishedWrong()) return;
+  const level = currentLevel();
+  const clockUp = Boolean(level.timeLimit && state.remaining != null && state.remaining <= 0);
+  if (!clockUp && problemElapsedMs() < problemDeadlineMs()) return;
+  grade(null);
+}
+
+function scheduleWrongTimeout() {
+  clearWrongTimeout();
+  if (state.locked || state.timerPaused || !inputIsFinishedWrong()) return;
+  const wait = problemDeadlineMs() - problemElapsedMs();
+  if (wait <= 0) {
+    grade(null);
+    return;
+  }
+  state.wrongTimeoutId = window.setTimeout(() => {
+    state.wrongTimeoutId = null;
+    maybeGradeOvertimeWrong();
+  }, wait);
+}
+
 function problemElapsedMs() {
   let elapsed = state.shownAt ? performance.now() - state.shownAt : 0;
   if (state.timerPaused && state.pausedAt) elapsed -= performance.now() - state.pausedAt;
@@ -933,10 +1105,12 @@ function problemElapsedMs() {
 }
 
 function pauseClocks() {
-  if (state.locked || state.timerPaused) return;
+  if (state.timerPaused) return;
   state.timerPaused = true;
   state.pausedAt = performance.now();
   clearTimer();
+  clearWrongTimeout();
+  syncBgMusic();
 }
 
 function resumeCountdown() {
@@ -962,7 +1136,7 @@ function resumeCountdown() {
     els.timerValue.textContent = `${Math.max(state.remaining, 0)}s`;
     if (state.remaining <= 0) {
       clearTimer();
-      grade(null);
+      maybeGradeOvertimeWrong();
     }
   }, 1000);
 }
@@ -974,11 +1148,15 @@ function resumeClocks() {
   }
   state.timerPaused = false;
   state.pausedAt = 0;
-  if (!state.locked) resumeCountdown();
+  if (!state.locked) {
+    resumeCountdown();
+    scheduleWrongTimeout();
+  }
+  syncBgMusic();
 }
 
 function syncFactsTimer() {
-  if (factsPopOpen()) pauseClocks();
+  if (factsPopOpen() || !els.settingsOverlay.hidden || !els.resetOverlay.hidden) pauseClocks();
   else resumeClocks();
 }
 
@@ -1003,6 +1181,7 @@ function startTimer() {
 
 function nextProblem() {
   clearFactRead();
+  clearWrongTimeout();
   state.locked = false;
   state.input = "";
   state.problem = generateProblem();
@@ -1064,6 +1243,7 @@ function grade(rawAnswer) {
   if (state.locked || !state.problem) return;
   state.locked = true;
   clearTimer();
+  clearWrongTimeout();
 
   const correct = rawAnswer === state.problem.answer;
   const elapsedMs = problemElapsedMs();
@@ -1133,19 +1313,23 @@ function handleKey(key) {
     state.input += key;
     renderProblem();
     if (state.problem && Number(state.input) === state.problem.answer) submit();
+    else scheduleWrongTimeout();
     return;
   }
   if (key === "back") {
     state.input = state.input.slice(0, -1);
     renderProblem();
+    scheduleWrongTimeout();
     return;
   }
   if (key === "enter") submit();
 }
 
 function startPlay() {
+  chooseStartSong();
   showScreen("play");
   nextProblem();
+  syncBgMusic();
 }
 
 els.startBtn.addEventListener("click", startPlay);
@@ -1162,6 +1346,7 @@ els.loginForm.addEventListener("submit", (event) => {
 });
 els.homeBtn.addEventListener("click", () => {
   clearTimer();
+  clearWrongTimeout();
   clearGradeTimeout();
   clearFactRead();
   showScreen("home");
@@ -1204,7 +1389,9 @@ function hideResetConfirm() {
 function resetProgress() {
   const sound = state.sound;
   const fastSeconds = state.fastSeconds;
-  applyProgress({ ...freshProgress(), sound, fastSeconds });
+  const songId = state.songId;
+  const musicVolume = state.musicVolume;
+  applyProgress({ ...freshProgress(), sound, fastSeconds, songId, musicVolume });
   save();
   hideResetConfirm();
   renderHome();
@@ -1213,13 +1400,27 @@ function resetProgress() {
 els.resetBtn.addEventListener("click", showResetConfirm);
 els.resetCancelBtn.addEventListener("click", hideResetConfirm);
 els.resetConfirmBtn.addEventListener("click", resetProgress);
+function musicVolumeLabel(volume) {
+  return `${Math.round(clampMusicVolume(volume) * 100)}%`;
+}
+
 function fastSecondsLabel(seconds) {
   return `${formatSeconds(seconds)} seconds`;
+}
+
+function applyMusicVolume(percent) {
+  state.musicVolume = clampMusicVolume(Number(percent) / 100);
+  syncSettingsForm();
+  save();
+  syncBgMusic();
 }
 
 function syncSettingsForm() {
   els.fastSlider.value = String(state.fastSeconds);
   els.fastSliderValue.textContent = fastSecondsLabel(state.fastSeconds);
+  syncSongList();
+  els.musicSlider.value = String(Math.round(state.musicVolume * 100));
+  els.musicSliderValue.textContent = musicVolumeLabel(state.musicVolume);
 }
 
 function showSettings() {
@@ -1227,16 +1428,21 @@ function showSettings() {
   pauseClocks();
   syncSettingsForm();
   els.settingsOverlay.hidden = false;
+  if (!state.playingSongId) chooseStartSong();
+  setSongMenuOpen(false);
   els.fastSlider.focus();
+  syncBgMusic();
 }
 
 function hideSettings() {
   if (els.settingsOverlay.hidden) return;
+  setSongMenuOpen(false);
   els.settingsOverlay.hidden = true;
   if (els.playScreen.classList.contains("is-active") && els.overlay.hidden) {
     renderPlayHud();
     syncFactsTimer();
   }
+  syncBgMusic();
 }
 
 function applyFastSeconds(value) {
@@ -1259,9 +1465,23 @@ els.settingsBtn.addEventListener("click", showSettings);
 els.settingsDoneBtn.addEventListener("click", hideSettings);
 els.settingsOverlay.addEventListener("click", (event) => {
   if (event.target === els.settingsOverlay) hideSettings();
+  else if (!els.songDropdown.contains(event.target)) setSongMenuOpen(false);
 });
 els.fastSlider.addEventListener("input", (event) => {
   applyFastSeconds(event.target.value);
+});
+els.songDropdownBtn.addEventListener("click", (event) => {
+  event.stopPropagation();
+  setSongMenuOpen(!songMenuOpen());
+});
+els.songList.addEventListener("click", (event) => {
+  const button = event.target.closest(".song-option");
+  if (!button) return;
+  applySongSetting(button.dataset.songId);
+  setSongMenuOpen(false);
+});
+els.musicSlider.addEventListener("input", (event) => {
+  applyMusicVolume(event.target.value);
 });
 els.soundBtn.addEventListener("click", () => {
   state.sound = !state.sound;
@@ -1302,9 +1522,10 @@ els.numpad.addEventListener("click", (event) => {
 });
 window.addEventListener("keydown", (event) => {
   if (!els.settingsOverlay.hidden) {
-    if (event.key === "Escape" || event.key === "Enter") {
+    if (event.key === "Escape") {
       event.preventDefault();
-      hideSettings();
+      if (songMenuOpen()) setSongMenuOpen(false);
+      else hideSettings();
     }
     return;
   }
@@ -1344,5 +1565,6 @@ window.addEventListener("keydown", (event) => {
   }
 });
 
+fillSongList();
 renderLogin();
 showScreen("login");

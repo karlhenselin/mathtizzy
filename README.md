@@ -45,3 +45,7 @@ Sound on/off is on the practice screen. Reset progress (from home) clears that p
 - `.htaccess` — serves `index.html` as the directory index
 
 Each player’s level, streaks, settings, and per-fact stats live in `localStorage`. Nothing is sent to a server.
+
+## Credits
+
+Music by [Fesliyan Studios](https://www.fesliyanstudios.com/).

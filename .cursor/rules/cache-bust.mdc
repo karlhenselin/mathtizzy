@@ -1,0 +1,19 @@
+---
+description: Bump JS/CSS query-string versions in index.html after asset changes
+globs: "{app.js,styles.css,index.html}"
+alwaysApply: false
+---
+
+# Cache-bust query strings
+
+This is a static site. Browsers and the host cache `app.js` and `styles.css`. After changing one of those files, bump the `?v=` on **that file's tag** in `index.html`.
+
+```html
+<link rel="stylesheet" href="styles.css?v=1" />
+<script src="app.js?v=1" defer></script>
+```
+
+- `app.js` changed → increment `app.js?v=` (1 → 2 → 3).
+- `styles.css` changed → increment `styles.css?v=`.
+- Integers only. The two files do not need to share the same number.
+- Do not bump `v` for README, music, or unrelated edits.
