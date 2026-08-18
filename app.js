@@ -1132,6 +1132,7 @@ function handleKey(key) {
     if (state.input.length >= 4) return;
     state.input += key;
     renderProblem();
+    if (state.problem && Number(state.input) === state.problem.answer) submit();
     return;
   }
   if (key === "back") {
