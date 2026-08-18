@@ -20,6 +20,34 @@ const FACT_RED = [231, 111, 81];
 const FACT_MID = [244, 208, 96];
 const FACT_GREEN = [42, 157, 143];
 const OP_TITLES = { "+": "Addition", "-": "Subtraction", "×": "Multiplication", "÷": "Division" };
+const OP_WORDS = { "+": "plus", "-": "minus", "×": "times", "÷": "divided by" };
+const ONES_WORDS = [
+  "zero",
+  "one",
+  "two",
+  "three",
+  "four",
+  "five",
+  "six",
+  "seven",
+  "eight",
+  "nine",
+  "ten",
+  "eleven",
+  "twelve",
+  "thirteen",
+  "fourteen",
+  "fifteen",
+  "sixteen",
+  "seventeen",
+  "eighteen",
+  "nineteen",
+];
+const TENS_WORDS = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
+const TOKEN_MS_BASE = 160;
+const TOKEN_MS_PER_LETTER = 75;
+const MISS_PAUSE_MS = 4400;
+const READ_HOLD_MS = 400;
 const factPoolCache = new Map();
 
 const LEVELS = [
@@ -86,6 +114,8 @@ const state = {
   attemptsSinceBump: 0,
   factScores: {},
   retrySoon: [],
+  readTimers: [],
+  gradeTimeoutId: null,
 };
 
 const els = {
@@ -452,6 +482,8 @@ function freshProgress() {
 
 function clearSession() {
   clearTimer();
+  clearGradeTimeout();
+  clearFactRead();
   Object.assign(state, {
     input: "",
     problem: null,
@@ -784,6 +816,92 @@ function renderProblem() {
   els.operator.textContent = op;
   els.answerSlot.textContent = state.input || "?";
   els.answerSlot.classList.toggle("is-empty", !state.input);
+  els.answerSlot.classList.remove("is-reveal");
+}
+
+function numberWords(n) {
+  const value = Math.round(Math.abs(Number(n) || 0));
+  if (value < 20) return ONES_WORDS[value];
+  if (value < 100) {
+    const tens = Math.floor(value / 10);
+    const ones = value % 10;
+    return ones ? `${TENS_WORDS[tens]}-${ONES_WORDS[ones]}` : TENS_WORDS[tens];
+  }
+  if (value < 1000) {
+    const hundreds = Math.floor(value / 100);
+    const rest = value % 100;
+    const head = `${ONES_WORDS[hundreds]} hundred`;
+    return rest ? `${head} ${numberWords(rest)}` : head;
+  }
+  return String(value);
+}
+
+function tokenMs(text) {
+  const letters = String(text).replace(/[^a-z]/gi, "").length;
+  return TOKEN_MS_BASE + TOKEN_MS_PER_LETTER * letters;
+}
+
+function factTokens(problem) {
+  return [
+    { text: numberWords(problem.a), el: els.leftOperand },
+    { text: OP_WORDS[problem.op] || problem.op, el: null },
+    { text: numberWords(problem.b), el: els.rightOperand },
+    { text: "equals", el: null },
+    { text: numberWords(problem.answer), el: els.answerSlot },
+  ];
+}
+
+function litFactEls() {
+  return [els.leftOperand, els.rightOperand, els.answerSlot];
+}
+
+function clearLit() {
+  litFactEls().forEach((el) => el.classList.remove("is-lit"));
+}
+
+function cancelSpeech() {
+  if (window.speechSynthesis) window.speechSynthesis.cancel();
+}
+
+function clearGradeTimeout() {
+  if (state.gradeTimeoutId) {
+    window.clearTimeout(state.gradeTimeoutId);
+    state.gradeTimeoutId = null;
+  }
+}
+
+function clearFactRead() {
+  state.readTimers.forEach((id) => window.clearTimeout(id));
+  state.readTimers = [];
+  clearLit();
+  cancelSpeech();
+}
+
+function speakFact(text) {
+  if (!state.sound || !window.speechSynthesis) return;
+  cancelSpeech();
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.rate = 0.45;
+  window.speechSynthesis.speak(utter);
+}
+
+function playFactRead(problem) {
+  clearFactRead();
+  const tokens = factTokens(problem);
+  speakFact(tokens.map((token) => token.text).join(" "));
+
+  let elapsed = 0;
+  tokens.forEach((token) => {
+    const start = elapsed;
+    state.readTimers.push(
+      window.setTimeout(() => {
+        clearLit();
+        if (token.el) token.el.classList.add("is-lit");
+      }, start)
+    );
+    elapsed += tokenMs(token.text);
+  });
+  return elapsed;
 }
 
 function beep(ok) {
@@ -884,6 +1002,7 @@ function startTimer() {
 }
 
 function nextProblem() {
+  clearFactRead();
   state.locked = false;
   state.input = "";
   state.problem = generateProblem();
@@ -896,6 +1015,7 @@ function nextProblem() {
 }
 
 function showOverlay({ title, blurb, stayNote = "", eyebrow = "Mastered", continueLabel = "Level up", stayLabel = "Stay here", canStay = true }) {
+  clearFactRead();
   setFactsOpen(false);
   els.settingsOverlay.hidden = true;
   els.overlayEyebrow.textContent = eyebrow;
@@ -956,6 +1076,7 @@ function grade(rawAnswer) {
   els.problemCard.classList.toggle("is-wrong", !correct);
   beep(correct);
 
+  let delay = slow ? 1600 : correct ? 450 : MISS_PAUSE_MS;
   if (correct) {
     state.correct += 1;
     state.streak += 1;
@@ -976,16 +1097,20 @@ function grade(rawAnswer) {
     els.feedback.textContent = `${shown} It was ${state.problem.answer}.`;
     els.answerSlot.textContent = String(state.problem.answer);
     els.answerSlot.classList.remove("is-empty");
+    els.answerSlot.classList.add("is-reveal");
+    delay = Math.max(MISS_PAUSE_MS, playFactRead(state.problem) + READ_HOLD_MS);
   }
 
   renderPlayHud();
   save();
 
-  window.setTimeout(() => {
+  clearGradeTimeout();
+  state.gradeTimeoutId = window.setTimeout(() => {
+    state.gradeTimeoutId = null;
     maybeLevelUp();
     if (!els.overlay.hidden) return;
     nextProblem();
-  }, slow ? 1600 : correct ? 450 : 2200);
+  }, delay);
 }
 
 function submit() {
@@ -1036,6 +1161,8 @@ els.loginForm.addEventListener("submit", (event) => {
 });
 els.homeBtn.addEventListener("click", () => {
   clearTimer();
+  clearGradeTimeout();
+  clearFactRead();
   showScreen("home");
   setFactsOpen(false);
   renderHome();
@@ -1139,6 +1266,7 @@ els.soundBtn.addEventListener("click", () => {
   state.sound = !state.sound;
   updateSoundButton();
   save();
+  if (!state.sound) cancelSpeech();
 });
 function hideLevelOverlay() {
   els.overlay.hidden = true;

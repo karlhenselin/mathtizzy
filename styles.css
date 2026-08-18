@@ -512,6 +512,10 @@ body {
   gap: 0.28em;
 }
 
+.equation span {
+  transition: transform 120ms ease, background 120ms ease, box-shadow 120ms ease, color 120ms ease;
+}
+
 .op {
   color: var(--coral);
 }
@@ -525,6 +529,25 @@ body {
 
 .answer-slot.is-empty {
   color: #9aa8aa;
+}
+
+.answer-slot.is-reveal {
+  color: var(--teal);
+  border-bottom-color: transparent;
+}
+
+.equation .is-lit {
+  background: #f8ead0;
+  border-radius: 10px;
+  padding: 0.04em 0.18em;
+  box-shadow: 0 0 0 3px var(--sand);
+  transform: scale(1.08);
+  color: var(--ink);
+}
+
+.answer-slot.is-lit {
+  border-bottom-color: var(--sand);
+  color: var(--ink);
 }
 
 .feedback {
@@ -682,5 +705,13 @@ body {
 
   .problem-card.is-wrong {
     animation: none;
+  }
+
+  .equation .is-lit {
+    transform: none;
+  }
+
+  .equation span {
+    transition: none;
   }
 }
