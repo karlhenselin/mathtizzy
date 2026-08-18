@@ -5,6 +5,10 @@ const FACT_RETRY_AFTER = 2;
 const FAST_SEC_MIN = 2;
 const FAST_SEC_MAX = 5;
 const FAST_SEC_DEFAULT = 3;
+const FACT_GREEN_RATIO = 5;
+const WHITE_WEIGHT = 12;
+const GREEN_WEIGHT = 0.06;
+const LOW_ACC_EXTRA = 60;
 const FACT_SLOW_MS = 8000;
 const FACT_TIME_CAP_MS = 20000;
 const SLOW_BUMP_SEC = 0.1;
@@ -91,7 +95,6 @@ const els = {
   userNameInput: document.getElementById("userNameInput"),
   homeScreen: document.getElementById("homeScreen"),
   playScreen: document.getElementById("playScreen"),
-  homeEyebrow: document.getElementById("homeEyebrow"),
   homeStats: document.getElementById("homeStats"),
   homeLevel: document.getElementById("homeLevel"),
   homeStreak: document.getElementById("homeStreak"),
@@ -188,12 +191,16 @@ function factAvgMs(stats) {
 }
 
 function factWeight(stats) {
-  if (isFactGreen(stats)) return 0.06;
-  if (!stats || (!stats.right && !stats.wrong)) return 12;
-  if (!stats.right) return 16 + stats.wrong * 3;
-  const avg = factAvgMs(stats);
-  const over = avg == null ? 0 : Math.max(0, (avg - fastMs()) / fastMs());
-  return 12 + stats.wrong + Math.min(8, over * 4);
+  if (isFactGreen(stats)) return GREEN_WEIGHT;
+  if (!stats || (!stats.right && !stats.wrong)) return WHITE_WEIGHT;
+
+  let weight = WHITE_WEIGHT + LOW_ACC_EXTRA * (1 - factAccuracyT(stats));
+  if (stats.right) {
+    const avg = factAvgMs(stats);
+    const over = avg == null ? 0 : Math.max(0, (avg - fastMs()) / fastMs());
+    weight += Math.min(8, over * 4);
+  }
+  return weight;
 }
 
 function normalizeFactScores(raw) {
@@ -252,9 +259,22 @@ function getLevelFacts(level) {
   return level.ops.flatMap((op) => getFactPool(level, op));
 }
 
+function factAccuracyT(stats) {
+  if (!stats || !stats.right) return 0;
+  if (!stats.wrong) return 1;
+  return Math.min(1, stats.right / (FACT_GREEN_RATIO * stats.wrong));
+}
+
+function factSpeedT(stats) {
+  const avg = factAvgMs(stats);
+  if (avg == null) return 0;
+  const t = 1 - (avg - fastMs()) / (FACT_SLOW_MS - fastMs());
+  return Math.max(0, Math.min(1, t));
+}
+
 function isFactGreen(stats) {
   const avg = factAvgMs(stats);
-  return avg != null && avg <= fastMs();
+  return avg != null && avg <= fastMs() && factAccuracyT(stats) >= 1;
 }
 
 function levelMastery(level) {
@@ -611,7 +631,8 @@ function playerLevelLabel() {
 
 function renderHome() {
   const hasProgress = state.attempted > 0 || state.levelIndex > 0;
-  els.homeEyebrow.textContent = playerLevelLabel();
+  const eyebrow = els.homeScreen.querySelector(".eyebrow");
+  if (eyebrow) eyebrow.textContent = playerLevelLabel();
   els.homeStats.hidden = !hasProgress;
   els.resetBtn.hidden = !hasProgress;
   els.homeLevel.textContent = String(Math.min(state.levelIndex + 1, LEVELS.length));
@@ -653,9 +674,7 @@ function factFill(key) {
   const stats = state.factScores[key];
   if (!stats || (!stats.right && !stats.wrong)) return "#ffffff";
   if (!stats.right) return rgbCss(FACT_RED);
-  const avg = factAvgMs(stats);
-  const t = 1 - (avg - fastMs()) / (FACT_SLOW_MS - fastMs());
-  const u = Math.max(0, Math.min(1, t));
+  const u = Math.min(factSpeedT(stats), factAccuracyT(stats));
   if (u < 0.5) return rgbCss(mixRgb(FACT_RED, FACT_MID, u * 2));
   return rgbCss(mixRgb(FACT_MID, FACT_GREEN, (u - 0.5) * 2));
 }
