@@ -6,6 +6,7 @@ const FAST_SEC_MIN = 1.5;
 const FAST_SEC_MAX = 8;
 const FAST_SEC_DEFAULT = 3.5;
 const MUSIC_VOL_DEFAULT = 0.7;
+const MUSIC_FADE_MS = 900;
 const FACT_GREEN_RATIO = 5;
 const WHITE_WEIGHT = 12;
 const GREEN_WEIGHT = 0.06;
@@ -132,6 +133,8 @@ const state = {
   readTimers: [],
   gradeTimeoutId: null,
   wrongTimeoutId: null,
+  musicFadeId: null,
+  musicFading: false,
 };
 
 const els = {
@@ -531,6 +534,7 @@ function clearSession() {
     shownAt: 0,
     playingSongId: null,
   });
+  clearMusicFade();
 }
 
 function applyProgress(data = {}) {
@@ -725,17 +729,69 @@ function updateSoundButton() {
 
 function syncBgMusic() {
   if (!els.bgMusic) return;
-  els.bgMusic.volume = state.musicVolume;
+  if (!state.musicFading) els.bgMusic.volume = state.musicVolume;
   const onPlay = els.playScreen.classList.contains("is-active");
   const settingsOpen = !els.settingsOverlay.hidden;
-  const overlayUp = !els.resetOverlay.hidden || !els.overlay.hidden || factsPopOpen();
-  const shouldPlay = state.sound && (settingsOpen || (onPlay && !state.timerPaused && !overlayUp));
+  const overlayUp = !els.resetOverlay.hidden || factsPopOpen();
+  const shouldPlay =
+    state.sound && (settingsOpen || !els.overlay.hidden || (onPlay && !state.timerPaused && !overlayUp));
   if (shouldPlay) {
     const play = els.bgMusic.play();
     if (play && typeof play.catch === "function") play.catch(() => {});
   } else {
+    clearMusicFade();
     els.bgMusic.pause();
+    els.bgMusic.volume = state.musicVolume;
   }
+}
+
+function clearMusicFade() {
+  if (state.musicFadeId) {
+    window.cancelAnimationFrame(state.musicFadeId);
+    state.musicFadeId = null;
+  }
+  state.musicFading = false;
+}
+
+function fadeMusicTo(target, ms, done) {
+  clearMusicFade();
+  if (!els.bgMusic) {
+    if (done) done();
+    return;
+  }
+  state.musicFading = true;
+  const from = els.bgMusic.volume;
+  const start = performance.now();
+  function tick(now) {
+    const t = Math.min(1, (now - start) / ms);
+    els.bgMusic.volume = from + (target - from) * t;
+    if (t < 1) {
+      state.musicFadeId = window.requestAnimationFrame(tick);
+      return;
+    }
+    state.musicFadeId = null;
+    state.musicFading = false;
+    els.bgMusic.volume = target;
+    if (done) done();
+  }
+  state.musicFadeId = window.requestAnimationFrame(tick);
+}
+
+function advanceRandomSong({ fade = false } = {}) {
+  if (state.songId !== SONG_RANDOM || !SONGS.length) return;
+  const nextId = pickRandomSongId(state.playingSongId);
+  if (!fade || !els.bgMusic || els.bgMusic.paused) {
+    loadSong(nextId);
+    syncBgMusic();
+    return;
+  }
+  fadeMusicTo(0, MUSIC_FADE_MS, () => {
+    loadSong(nextId);
+    state.musicFading = true;
+    els.bgMusic.volume = 0;
+    syncBgMusic();
+    fadeMusicTo(state.musicVolume, MUSIC_FADE_MS);
+  });
 }
 
 function songById(id) {
@@ -749,6 +805,7 @@ function pickRandomSongId(avoidId) {
 
 function loadSong(id) {
   const song = songById(id);
+  els.bgMusic.loop = state.songId !== SONG_RANDOM;
   if (state.playingSongId === song.id && els.bgMusic.getAttribute("src") === encodeURI(song.file)) {
     els.bgMusic.currentTime = 0;
     return;
@@ -773,7 +830,7 @@ function applySongSetting(id) {
 }
 
 function songLabel(id) {
-  if (id === SONG_RANDOM) return "Random each session";
+  if (id === SONG_RANDOM) return "Random";
   return songById(id).name;
 }
 
@@ -788,7 +845,7 @@ function setSongMenuOpen(open) {
 }
 
 function fillSongList() {
-  const options = [{ id: SONG_RANDOM, name: "Random each session" }, ...SONGS];
+  const options = [{ id: SONG_RANDOM, name: "Random" }, ...SONGS];
   els.songList.replaceChildren(
     ...options.map((song) => {
       const button = document.createElement("button");
@@ -1207,6 +1264,8 @@ function showOverlay({ title, blurb, stayNote = "", eyebrow = "Mastered", contin
   els.overlayStay.hidden = !canStay;
   els.overlay.hidden = false;
   els.overlayContinue.focus();
+  if (state.songId === SONG_RANDOM) advanceRandomSong({ fade: true });
+  else syncBgMusic();
 }
 
 function maybeLevelUp() {
@@ -1563,6 +1622,12 @@ window.addEventListener("keydown", (event) => {
     event.preventDefault();
     handleKey("enter");
   }
+});
+
+els.bgMusic.addEventListener("ended", () => {
+  if (state.songId !== SONG_RANDOM) return;
+  loadSong(pickRandomSongId(state.playingSongId));
+  syncBgMusic();
 });
 
 fillSongList();
