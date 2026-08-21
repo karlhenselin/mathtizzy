@@ -555,6 +555,14 @@ body {
   margin: 12px 0 0;
   font-weight: 800;
   color: var(--muted);
+  text-align: center;
+  line-height: 1.25;
+}
+
+.problem-card.is-correct .feedback,
+.problem-card.is-slow .feedback {
+  font-size: clamp(1.45rem, 5.5vw, 2rem);
+  color: var(--ink);
 }
 
 .pad {

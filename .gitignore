@@ -1,0 +1,14 @@
+node_modules/
+www/
+android/
+.DS_Store
+*.log
+.idea/
+.vscode/
+local.properties
+*.iml
+.gradle/
+build/
+captures/
+.externalNativeBuild/
+.cxx/

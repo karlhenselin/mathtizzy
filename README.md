@@ -1,6 +1,6 @@
 # Mathtizzy
 
-A small math-facts practice app for kids. Problems start easy and get harder as each fact becomes fast and accurate. Progress is saved per player in the browser.
+A small math-facts practice app for kids. Problems start easy and get harder as each fact becomes fast and accurate. Progress is saved per player in the browser (or on-device in the Android app).
 
 Open `index.html` in a browser, or serve the folder with any static host.
 
@@ -12,7 +12,7 @@ Open `index.html` in a browser, or serve the folder with any static host.
 
 A fact turns **green** when its average correct time is at or under the maximum-time setting **and** it has at least **5 correct answers per 1 miss**. The Facts map next to the mastery bar shows unseen (white), shaky (red–gold), and fluent (green) cells.
 
-Missed facts are spoken aloud (if sound is on) and highlighted in reading order so the full equation can be seen and heard. Sound off still walks the highlights at the same pace.
+Missed facts are spoken aloud (if sound is on) and highlighted in reading order — once to listen, then again to read along. The first miss each day shows a short tip explaining that. Sound off still walks the highlights at the same pace.
 
 ## Levels
 
@@ -35,13 +35,30 @@ Later levels reuse shaky facts more often. Green facts almost never appear.
 
 **Maximum time** (1.5–8 seconds, default 3.5s) is the fluency bar. A fact only counts as mastered when it is usually answered within this limit. If several answers in a row are correct but slow, the limit eases up a little.
 
-Sound on/off is on the practice screen. Reset progress (from home) clears that player only.
+Sound on/off is on the practice screen. Music track and volume are in Settings. Reset progress (from home) clears that player only.
+
+## Android (Capacitor)
+
+Requires Node.js 22+, [Android Studio](https://developer.android.com/studio) Otter or newer, JDK 21, and Android SDK **36**.
+
+```bash
+npm install
+npm run cap:android
+```
+
+That copies the web assets into `www/`, syncs them into the native project, and opens Android Studio. After web changes, run `npm run cap:sync` (or `cap:android` again) before rebuilding.
+
+The project uses Capacitor 8 (`minSdk` 24, `targetSdk`/`compileSdk` 36). Speech timing can be tuned per platform in `SPEECH_BY_PLATFORM` inside `app.js` (`web`, `android`, `ios`).
 
 ## Files
 
 - `index.html` — screens and layout
 - `styles.css` — look and feel
 - `app.js` — problems, scoring, speech, and local storage
+- `package.json` — Capacitor dependencies and scripts
+- `capacitor.config.json` — app id and `webDir`
+- `scripts/copy-www.mjs` — copies static assets into `www/` for Capacitor
+- `android/` — native Android project
 - `.htaccess` — serves `index.html` as the directory index
 
 Each player’s level, streaks, settings, and per-fact stats live in `localStorage`. Nothing is sent to a server.

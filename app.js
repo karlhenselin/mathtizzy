@@ -5,6 +5,7 @@ const FACT_RETRY_AFTER = 2;
 const FAST_SEC_MIN = 1.5;
 const FAST_SEC_MAX = 8;
 const FAST_SEC_DEFAULT = 3.5;
+const FACT_READ_COUNT = 2;
 const MUSIC_VOL_DEFAULT = 0.7;
 const MUSIC_FADE_MS = 900;
 const FACT_GREEN_RATIO = 5;
@@ -57,10 +58,40 @@ const ONES_WORDS = [
   "nineteen",
 ];
 const TENS_WORDS = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
-const TOKEN_MS_BASE = 160;
-const TOKEN_MS_PER_LETTER = 75;
-const MISS_PAUSE_MS = 4400;
-const READ_HOLD_MS = 400;
+// Per-platform speech: rate drives TTS; token/gap/hold keep highlights aligned with voice.
+// Tune android/ios after device testing — WebView TTS timing often differs from desktop.
+const SPEECH_BY_PLATFORM = {
+  web: {
+    rate: 0.45,
+    tokenMsBase: 160,
+    tokenMsPerLetter: 75,
+    readGapMs: 500,
+    highlightLagMs: 100,
+    readHoldMs: 1800,
+  },
+  android: {
+    rate: 0.45,
+    tokenMsBase: 160,
+    tokenMsPerLetter: 75,
+    readGapMs: 500,
+    highlightLagMs: 100,
+    readHoldMs: 1800,
+  },
+  ios: {
+    rate: 0.45,
+    tokenMsBase: 160,
+    tokenMsPerLetter: 75,
+    readGapMs: 500,
+    highlightLagMs: 100,
+    readHoldMs: 1800,
+  },
+};
+const MISS_PAUSE_MS = 5200;
+const HIT_PAUSE_MS = 1000;
+const SLOW_PAUSE_MS = 1600;
+const CORRECTION_TIP_SPEECH = "I will read you the corrected fact. Then read it with me!";
+const CORRECTION_TIP_HOLD_MS = 400;
+const CORRECTION_TIP_MUTED_MS = 3200;
 const factPoolCache = new Map();
 
 const LEVELS = [
@@ -116,8 +147,11 @@ const state = {
   playingSongId: null,
   musicVolume: MUSIC_VOL_DEFAULT,
   fastSeconds: FAST_SEC_DEFAULT,
+  correctionTipDay: "",
   heldAtLevel: false,
   input: "",
+  fullEntries: 0,
+  clearedOnce: false,
   problem: null,
   locked: false,
   timerId: null,
@@ -133,6 +167,7 @@ const state = {
   readTimers: [],
   gradeTimeoutId: null,
   wrongTimeoutId: null,
+  correctionTipTimeoutId: null,
   musicFadeId: null,
   musicFading: false,
 };
@@ -196,6 +231,7 @@ const els = {
   musicSlider: document.getElementById("musicSlider"),
   musicSliderValue: document.getElementById("musicSliderValue"),
   settingsDoneBtn: document.getElementById("settingsDoneBtn"),
+  correctionTipOverlay: document.getElementById("correctionTipOverlay"),
 };
 
 function clampFastSeconds(value) {
@@ -510,6 +546,7 @@ function freshProgress() {
     songId: SONG_RANDOM,
     musicVolume: MUSIC_VOL_DEFAULT,
     fastSeconds: FAST_SEC_DEFAULT,
+    correctionTipDay: "",
     heldAtLevel: false,
     slowRun: 0,
     attemptsSinceBump: 0,
@@ -522,9 +559,13 @@ function clearSession() {
   clearTimer();
   clearWrongTimeout();
   clearGradeTimeout();
+  clearCorrectionTipTimeout();
   clearFactRead();
+  if (els.correctionTipOverlay) els.correctionTipOverlay.hidden = true;
   Object.assign(state, {
     input: "",
+    fullEntries: 0,
+    clearedOnce: false,
     problem: null,
     locked: false,
     remaining: null,
@@ -549,6 +590,7 @@ function applyProgress(data = {}) {
     songId: clampSongId(data.songId),
     musicVolume: clampMusicVolume(data.musicVolume ?? MUSIC_VOL_DEFAULT),
     fastSeconds: clampFastSeconds(data.fastSeconds ?? FAST_SEC_DEFAULT),
+    correctionTipDay: typeof data.correctionTipDay === "string" ? data.correctionTipDay : "",
     heldAtLevel: data.heldAtLevel ?? false,
     slowRun: Number(data.slowRun) || 0,
     attemptsSinceBump: Number(data.attemptsSinceBump) || 0,
@@ -612,6 +654,7 @@ function progressSnapshot() {
     songId: state.songId,
     musicVolume: state.musicVolume,
     fastSeconds: state.fastSeconds,
+    correctionTipDay: state.correctionTipDay,
     heldAtLevel: state.heldAtLevel,
     slowRun: state.slowRun,
     attemptsSinceBump: state.attemptsSinceBump,
@@ -1025,9 +1068,23 @@ function numberWords(n) {
   return String(value);
 }
 
+function detectSpeechPlatform() {
+  const cap = window.Capacitor;
+  if (cap && typeof cap.getPlatform === "function") {
+    const platform = cap.getPlatform();
+    if (platform === "ios" || platform === "android") return platform;
+  }
+  return "web";
+}
+
+function speechSettings() {
+  return SPEECH_BY_PLATFORM[detectSpeechPlatform()] || SPEECH_BY_PLATFORM.web;
+}
+
 function tokenMs(text) {
+  const speech = speechSettings();
   const letters = String(text).replace(/[^a-z]/gi, "").length;
-  return TOKEN_MS_BASE + TOKEN_MS_PER_LETTER * letters;
+  return speech.tokenMsBase + speech.tokenMsPerLetter * letters;
 }
 
 function factTokens(problem) {
@@ -1070,27 +1127,48 @@ function speakFact(text) {
   if (!state.sound || !window.speechSynthesis) return;
   cancelSpeech();
   const utter = new SpeechSynthesisUtterance(text);
-  utter.rate = 0.45;
+  utter.rate = speechSettings().rate;
   window.speechSynthesis.speak(utter);
 }
 
 function playFactRead(problem) {
   clearFactRead();
+  const speech = speechSettings();
   const tokens = factTokens(problem);
-  speakFact(tokens.map((token) => token.text).join(" "));
-
+  const phrase = tokens.map((token) => token.text).join(" ");
   let elapsed = 0;
-  tokens.forEach((token) => {
-    const start = elapsed;
-    state.readTimers.push(
-      window.setTimeout(() => {
-        clearLit();
-        if (token.el) token.el.classList.add("is-lit");
-      }, start)
-    );
-    elapsed += tokenMs(token.text);
-  });
-  return elapsed;
+
+  for (let pass = 0; pass < FACT_READ_COUNT; pass++) {
+    const passStart = elapsed;
+    if (pass === 0) {
+      speakFact(phrase);
+    } else {
+      state.readTimers.push(
+        window.setTimeout(() => {
+          if (!state.sound || !window.speechSynthesis) return;
+          const utter = new SpeechSynthesisUtterance(phrase);
+          utter.rate = speech.rate;
+          window.speechSynthesis.speak(utter);
+        }, passStart)
+      );
+    }
+
+    const highlightLag = pass > 0 ? speech.highlightLagMs : 0;
+    tokens.forEach((token) => {
+      const start = elapsed + highlightLag;
+      state.readTimers.push(
+        window.setTimeout(() => {
+          clearLit();
+          if (token.el) token.el.classList.add("is-lit");
+        }, start)
+      );
+      elapsed += tokenMs(token.text);
+    });
+
+    if (pass < FACT_READ_COUNT - 1) elapsed += speech.readGapMs;
+  }
+
+  return elapsed + (FACT_READ_COUNT > 1 ? speech.highlightLagMs : 0);
 }
 
 function beep(ok) {
@@ -1236,24 +1314,33 @@ function startTimer() {
   resumeCountdown();
 }
 
+function answerDigitCount() {
+  return state.problem ? String(state.problem.answer).length : 1;
+}
+
 function nextProblem() {
   clearFactRead();
   clearWrongTimeout();
+  clearTimer();
   state.locked = false;
   state.input = "";
+  state.fullEntries = 0;
+  state.clearedOnce = false;
   state.problem = generateProblem();
-  state.shownAt = performance.now();
   els.problemCard.classList.remove("is-correct", "is-slow", "is-wrong");
   els.feedback.textContent = "";
   renderPlayHud();
   renderProblem();
+  state.shownAt = performance.now();
   startTimer();
 }
 
 function showOverlay({ title, blurb, stayNote = "", eyebrow = "Mastered", continueLabel = "Level up", stayLabel = "Stay here", canStay = true }) {
   clearFactRead();
+  clearCorrectionTipTimeout();
   setFactsOpen(false);
   els.settingsOverlay.hidden = true;
+  els.correctionTipOverlay.hidden = true;
   els.overlayEyebrow.textContent = eyebrow;
   els.overlayTitle.textContent = title;
   els.overlayBlurb.textContent = blurb;
@@ -1266,6 +1353,81 @@ function showOverlay({ title, blurb, stayNote = "", eyebrow = "Mastered", contin
   els.overlayContinue.focus();
   if (state.songId === SONG_RANDOM) advanceRandomSong({ fade: true });
   else syncBgMusic();
+}
+
+function todayKey() {
+  const d = new Date();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${month}-${day}`;
+}
+
+function shouldShowCorrectionTip() {
+  return state.correctionTipDay !== todayKey();
+}
+
+function clearCorrectionTipTimeout() {
+  if (state.correctionTipTimeoutId) {
+    window.clearTimeout(state.correctionTipTimeoutId);
+    state.correctionTipTimeoutId = null;
+  }
+}
+
+function showCorrectionTip() {
+  state.correctionTipDay = todayKey();
+  save();
+  clearCorrectionTipTimeout();
+  setFactsOpen(false);
+  els.settingsOverlay.hidden = true;
+  els.correctionTipOverlay.hidden = false;
+
+  const finish = () => {
+    if (els.correctionTipOverlay.hidden) return;
+    clearCorrectionTipTimeout();
+    continueFromCorrectionTip();
+  };
+
+  if (state.sound && window.speechSynthesis) {
+    cancelSpeech();
+    const utter = new SpeechSynthesisUtterance(CORRECTION_TIP_SPEECH);
+    utter.rate = speechSettings().rate;
+    utter.onend = () => {
+      clearCorrectionTipTimeout();
+      state.correctionTipTimeoutId = window.setTimeout(finish, CORRECTION_TIP_HOLD_MS);
+    };
+    window.speechSynthesis.speak(utter);
+    state.correctionTipTimeoutId = window.setTimeout(
+      finish,
+      tokenMs(CORRECTION_TIP_SPEECH) + CORRECTION_TIP_HOLD_MS + 2500
+    );
+  } else {
+    state.correctionTipTimeoutId = window.setTimeout(finish, CORRECTION_TIP_MUTED_MS);
+  }
+  syncBgMusic();
+}
+
+function scheduleAfterGrade(delay) {
+  clearGradeTimeout();
+  state.gradeTimeoutId = window.setTimeout(() => {
+    state.gradeTimeoutId = null;
+    maybeLevelUp();
+    if (!els.overlay.hidden) return;
+    nextProblem();
+  }, delay);
+}
+
+function continueFromCorrectionTip() {
+  if (els.correctionTipOverlay.hidden) return;
+  clearCorrectionTipTimeout();
+  els.correctionTipOverlay.hidden = true;
+  cancelSpeech();
+  syncBgMusic();
+  if (!state.problem) {
+    nextProblem();
+    return;
+  }
+  const delay = Math.max(MISS_PAUSE_MS, playFactRead(state.problem) + speechSettings().readHoldMs);
+  scheduleAfterGrade(delay);
 }
 
 function maybeLevelUp() {
@@ -1315,7 +1477,8 @@ function grade(rawAnswer) {
   els.problemCard.classList.toggle("is-wrong", !correct);
   beep(correct);
 
-  let delay = slow ? 1600 : correct ? 450 : MISS_PAUSE_MS;
+  let delay = slow ? SLOW_PAUSE_MS : correct ? HIT_PAUSE_MS : MISS_PAUSE_MS;
+  let waitForTip = false;
   if (correct) {
     state.correct += 1;
     state.streak += 1;
@@ -1337,19 +1500,18 @@ function grade(rawAnswer) {
     els.answerSlot.textContent = String(state.problem.answer);
     els.answerSlot.classList.remove("is-empty");
     els.answerSlot.classList.add("is-reveal");
-    delay = Math.max(MISS_PAUSE_MS, playFactRead(state.problem) + READ_HOLD_MS);
+    if (shouldShowCorrectionTip()) {
+      waitForTip = true;
+      showCorrectionTip();
+    } else {
+      delay = Math.max(MISS_PAUSE_MS, playFactRead(state.problem) + speechSettings().readHoldMs);
+    }
   }
 
   renderPlayHud();
   save();
 
-  clearGradeTimeout();
-  state.gradeTimeoutId = window.setTimeout(() => {
-    state.gradeTimeoutId = null;
-    maybeLevelUp();
-    if (!els.overlay.hidden) return;
-    nextProblem();
-  }, delay);
+  if (!waitForTip) scheduleAfterGrade(delay);
 }
 
 function submit() {
@@ -1363,20 +1525,35 @@ function handleKey(key) {
     state.locked ||
     !els.overlay.hidden ||
     !els.settingsOverlay.hidden ||
-    !els.resetOverlay.hidden
+    !els.resetOverlay.hidden ||
+    !els.correctionTipOverlay.hidden
   ) {
     return;
   }
   if (key >= "0" && key <= "9") {
-    if (state.input.length >= 4) return;
+    const digits = answerDigitCount();
+    if (state.input.length >= digits) return;
     state.input += key;
     renderProblem();
-    if (state.problem && Number(state.input) === state.problem.answer) submit();
-    else scheduleWrongTimeout();
+    if (state.problem && Number(state.input) === state.problem.answer) {
+      submit();
+      return;
+    }
+    if (state.input.length === digits) {
+      state.fullEntries += 1;
+      if (state.fullEntries >= 2 || state.clearedOnce) {
+        submit();
+        return;
+      }
+    }
+    scheduleWrongTimeout();
     return;
   }
   if (key === "back") {
+    if (!state.input) return;
+    if (state.clearedOnce && state.input.length === 1) return;
     state.input = state.input.slice(0, -1);
+    if (!state.input) state.clearedOnce = true;
     renderProblem();
     scheduleWrongTimeout();
     return;
@@ -1407,7 +1584,9 @@ els.homeBtn.addEventListener("click", () => {
   clearTimer();
   clearWrongTimeout();
   clearGradeTimeout();
+  clearCorrectionTipTimeout();
   clearFactRead();
+  els.correctionTipOverlay.hidden = true;
   showScreen("home");
   setFactsOpen(false);
   renderHome();
@@ -1603,6 +1782,9 @@ window.addEventListener("keydown", (event) => {
       if (active === els.resetConfirmBtn) resetProgress();
       else hideResetConfirm();
     }
+    return;
+  }
+  if (!els.correctionTipOverlay.hidden) {
     return;
   }
   if (!els.overlay.hidden) {
