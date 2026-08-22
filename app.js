@@ -58,32 +58,55 @@ const ONES_WORDS = [
   "nineteen",
 ];
 const TENS_WORDS = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
-// Per-platform speech: rate drives native TTS on device and Web Speech in the browser.
-// Token/gap/hold keep highlights aligned with voice. Tune android/ios after device testing.
+// Missed-fact read: the voice and the number highlights use separate clocks.
+// rate is the only field that changes how fast TTS talks. The rest only move
+// lights and when the next problem starts. Tune each platform after listening
+// on that engine — Chrome, Cursor's browser, and Android TTS do not share a
+// "normal" speed at the same rate number.
+//
+// rate             VOICE. SpeechSynthesis / native TTS speed. 1.0 is that
+//                  engine's default. Does not move highlights.
+// tokenMsBase      HIGHLIGHT. Fixed ms each piece stays in the sweep (left
+//                  number, "plus"/"minus"/…, right number, "equals", answer)
+//                  before the next piece lights. "plus" and "equals" have no
+//                  lit element but still consume this time so the voice and
+//                  lights stay in step.
+// tokenMsPerLetter HIGHLIGHT. Extra ms per letter in that piece, so
+//                  "seventeen" stays lit longer than "six".
+//                  Duration = tokenMsBase + tokenMsPerLetter * letters.
+// readGapMs        VOICE + HIGHLIGHT. Silence between the listen pass and the
+//                  read-along pass. Pushes back the second speak() and the
+//                  second highlight sweep.
+// highlightLagMs   HIGHLIGHT. Extra delay before lights start on the second
+//                  pass only, so the voice can lead the highlight. Also added
+//                  to the wait after the read before the next problem.
+// readHoldMs       WAIT. Extra silence after the last highlight before the
+//                  next problem. The miss wait is max(MISS_PAUSE_MS, read
+//                  length + readHoldMs).
 const SPEECH_BY_PLATFORM = {
   web: {
-    rate: 0.45,
-    tokenMsBase: 160,
+    rate: 0.73,
+    tokenMsBase: 128,
     tokenMsPerLetter: 75,
     readGapMs: 500,
     highlightLagMs: 100,
-    readHoldMs: 1800,
+    readHoldMs: 2500,
   },
   android: {
     rate: 0.78,
     tokenMsBase: 128,
-    tokenMsPerLetter: 60,
-    readGapMs: 200,
-    highlightLagMs: 80,
-    readHoldMs: 1800,
-  },
-  ios: {
-    rate: 0.45,
-    tokenMsBase: 160,
     tokenMsPerLetter: 75,
     readGapMs: 500,
     highlightLagMs: 100,
-    readHoldMs: 1800,
+    readHoldMs: 2500,
+  },
+  ios: {
+    rate: 0.75,
+    tokenMsBase: 140,
+    tokenMsPerLetter: 75,
+    readGapMs: 500,
+    highlightLagMs: 100,
+    readHoldMs: 2500,
   },
 };
 const MISS_PAUSE_MS = 5200;
