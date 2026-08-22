@@ -48,6 +48,8 @@ npm run cap:android
 
 That copies the web assets into `www/`, syncs them into the native project, and opens Android Studio. After web changes, run `npm run cap:sync` (or `cap:android` again) before rebuilding.
 
+To make a Play Store upload: **Build → Generate Signed Bundle / APK**, choose **Android App Bundle**. The file is `android/app/build/outputs/bundle/release/app-release.aab`. Full signing steps are in [`playStoreAssets/RELEASE.md`](playStoreAssets/RELEASE.md).
+
 The project uses Capacitor 8 (`minSdk` 24, `targetSdk`/`compileSdk` 36). Android System WebView does not implement the Web Speech API, so the app uses `@capacitor-community/text-to-speech` on device and `speechSynthesis` in the browser. Speech timing can be tuned per platform in `SPEECH_BY_PLATFORM` inside `app.js` (`web`, `android`, `ios`).
 
 ## Files

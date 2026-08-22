@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.petraguardsoftware.mathtizzy",
+      "sha256_cert_fingerprints": [
+        "DC:5E:3D:C5:3C:0B:38:0C:3F:77:D3:3F:31:1D:BC:42:48:4B:0B:D5:01:CF:04:CB:B2:92:8E:59:3A:19:CB:A8"
+      ]
+    }
+  }
+]

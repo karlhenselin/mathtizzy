@@ -85,7 +85,7 @@ const TENS_WORDS = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seve
 //                  length + readHoldMs).
 const SPEECH_BY_PLATFORM = {
   web: {
-    rate: 0.73,
+    rate: 0.62,
     tokenMsBase: 128,
     tokenMsPerLetter: 75,
     readGapMs: 500,
