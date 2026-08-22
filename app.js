@@ -70,11 +70,11 @@ const SPEECH_BY_PLATFORM = {
     readHoldMs: 1800,
   },
   android: {
-    rate: 0.45,
-    tokenMsBase: 160,
-    tokenMsPerLetter: 75,
-    readGapMs: 500,
-    highlightLagMs: 100,
+    rate: 0.78,
+    tokenMsBase: 128,
+    tokenMsPerLetter: 60,
+    readGapMs: 200,
+    highlightLagMs: 80,
     readHoldMs: 1800,
   },
   ios: {
