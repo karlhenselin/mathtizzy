@@ -58,8 +58,7 @@ The project uses Capacitor 8 (`minSdk` 24, `targetSdk`/`compileSdk` 36). Android
 - `package.json` — Capacitor dependencies and scripts
 - `capacitor.config.json` — app id and `webDir`
 - `scripts/copy-www.mjs` — copies static assets into `www/` for Capacitor
-- `scripts/sync-android-module.mjs` — copies Capacitor's `android/app` output into the `android/mathtizzy` Gradle module
-- `android/` — native Android project
+- `android/` — native Android project (Gradle module is `app`; the Play name stays Mathtizzy)
 - `.htaccess` — serves `index.html` as the directory index
 
 Each player’s level, streaks, settings, and per-fact stats live in `localStorage`. Nothing is sent to a server.

@@ -767,6 +767,12 @@ body {
   color: var(--muted);
 }
 
+.settings-version {
+  margin: -8px 0 18px;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
 .settings-credit a {
   color: var(--teal);
   font-weight: 800;

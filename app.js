@@ -175,6 +175,7 @@ const state = {
 let nativeTtsPlugin;
 let speechToken = 0;
 let speechHoldsMusic = false;
+let appInactive = false;
 
 const els = {
   loginScreen: document.getElementById("loginScreen"),
@@ -235,6 +236,7 @@ const els = {
   musicSlider: document.getElementById("musicSlider"),
   musicSliderValue: document.getElementById("musicSliderValue"),
   settingsDoneBtn: document.getElementById("settingsDoneBtn"),
+  appVersion: document.getElementById("appVersion"),
   correctionTipOverlay: document.getElementById("correctionTipOverlay"),
 };
 
@@ -782,6 +784,7 @@ function syncBgMusic() {
   const overlayUp = !els.resetOverlay.hidden || factsPopOpen();
   const shouldPlay =
     state.sound &&
+    !appInactive &&
     !speechHoldsMusic &&
     (settingsOpen || !els.overlay.hidden || (onPlay && !state.timerPaused && !overlayUp));
   if (shouldPlay) {
@@ -1121,6 +1124,29 @@ function getNativeTts() {
   return nativeTtsPlugin;
 }
 
+function getAppVersionPlugin() {
+  const cap = window.Capacitor;
+  if (!cap || typeof cap.isNativePlatform !== "function" || !cap.isNativePlatform()) return null;
+  if (typeof cap.getPlatform === "function" && cap.getPlatform() !== "android") return null;
+  if (typeof cap.registerPlugin !== "function") return null;
+  return cap.registerPlugin("AppVersion");
+}
+
+function fillAppVersion() {
+  if (!els.appVersion) return;
+  const plugin = getAppVersionPlugin();
+  if (!plugin || typeof plugin.getVersionName !== "function") return;
+  plugin
+    .getVersionName()
+    .then((info) => {
+      const versionName = info && info.versionName;
+      if (!versionName) return;
+      els.appVersion.textContent = `Version ${versionName}`;
+      els.appVersion.hidden = false;
+    })
+    .catch(() => {});
+}
+
 function canSpeak() {
   return !!(getNativeTts() || window.speechSynthesis);
 }
@@ -1334,6 +1360,7 @@ function pauseClocks() {
 function resumeCountdown() {
   const level = currentLevel();
   if (
+    appInactive ||
     !level.timeLimit ||
     state.locked ||
     state.timerPaused ||
@@ -1374,7 +1401,7 @@ function resumeClocks() {
 }
 
 function syncFactsTimer() {
-  if (factsPopOpen() || !els.settingsOverlay.hidden || !els.resetOverlay.hidden) pauseClocks();
+  if (appInactive || factsPopOpen() || !els.settingsOverlay.hidden || !els.resetOverlay.hidden) pauseClocks();
   else resumeClocks();
 }
 
@@ -1385,12 +1412,12 @@ function startTimer() {
   const level = currentLevel();
   if (!level.timeLimit) {
     els.timerValue.textContent = "—";
-    if (factsPopOpen() || !els.settingsOverlay.hidden) pauseClocks();
+    if (appInactive || factsPopOpen() || !els.settingsOverlay.hidden) pauseClocks();
     return;
   }
   state.remaining = level.timeLimit;
   els.timerValue.textContent = `${state.remaining}s`;
-  if (factsPopOpen() || !els.settingsOverlay.hidden) {
+  if (appInactive || factsPopOpen() || !els.settingsOverlay.hidden) {
     pauseClocks();
     return;
   }
@@ -1894,7 +1921,29 @@ els.bgMusic.addEventListener("ended", () => {
   syncBgMusic();
 });
 
+function setAppInactive(inactive) {
+  if (appInactive === inactive) return;
+  appInactive = inactive;
+  if (inactive) {
+    cancelSpeech();
+    pauseClocks();
+    syncBgMusic();
+    return;
+  }
+  syncFactsTimer();
+  syncBgMusic();
+}
+
+document.addEventListener("visibilitychange", () => {
+  setAppInactive(document.visibilityState === "hidden");
+});
+document.addEventListener("pause", () => setAppInactive(true));
+document.addEventListener("resume", () => setAppInactive(false));
+window.addEventListener("pagehide", () => setAppInactive(true));
+window.addEventListener("pageshow", () => setAppInactive(false));
+
 fillSongList();
+fillAppVersion();
 renderLogin();
 showScreen("login");
 if (window.speechSynthesis && typeof window.speechSynthesis.getVoices === "function") {

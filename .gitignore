@@ -1,6 +1,6 @@
 node_modules/
 www/
-android/
+.tmp-android-template/
 .DS_Store
 *.log
 .idea/
