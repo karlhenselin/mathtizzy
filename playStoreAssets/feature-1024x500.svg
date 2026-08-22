@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="500" viewBox="0 0 1024 500">
+  <defs>
+    <radialGradient id="glow" cx="18%" cy="0%" r="70%">
+      <stop offset="0%" stop-color="#1a6a6e"/>
+      <stop offset="55%" stop-color="#0d3b3e" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glow2" cx="88%" cy="110%" r="55%">
+      <stop offset="0%" stop-color="#2a9d8f" stop-opacity="0.35"/>
+      <stop offset="70%" stop-color="#0d3b3e" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1024" height="500" fill="#0d3b3e"/>
+  <rect width="1024" height="500" fill="url(#glow)"/>
+  <rect width="1024" height="500" fill="url(#glow2)"/>
+
+  <!-- Brand mark -->
+  <g transform="translate(120 250)">
+    <g fill="#f4a261" transform="rotate(45)">
+      <rect x="-18" y="-92" width="36" height="184" rx="18"/>
+      <rect x="-92" y="-18" width="184" height="36" rx="18"/>
+    </g>
+  </g>
+
+  <!-- Wordmark + tagline -->
+  <text
+    x="280"
+    y="235"
+    fill="#f4efe6"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-size="92"
+    font-weight="700"
+  >Mathtizzy</text>
+  <text
+    x="284"
+    y="300"
+    fill="#f4a261"
+    font-family="Nunito, Arial, Helvetica, sans-serif"
+    font-size="28"
+    font-weight="700"
+  >Math facts that level up with you</text>
+</svg>

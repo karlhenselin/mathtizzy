@@ -58,8 +58,8 @@ const ONES_WORDS = [
   "nineteen",
 ];
 const TENS_WORDS = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
-// Per-platform speech: rate drives TTS; token/gap/hold keep highlights aligned with voice.
-// Tune android/ios after device testing — WebView TTS timing often differs from desktop.
+// Per-platform speech: rate drives native TTS on device and Web Speech in the browser.
+// Token/gap/hold keep highlights aligned with voice. Tune android/ios after device testing.
 const SPEECH_BY_PLATFORM = {
   web: {
     rate: 0.45,
@@ -171,6 +171,10 @@ const state = {
   musicFadeId: null,
   musicFading: false,
 };
+
+let nativeTtsPlugin;
+let speechToken = 0;
+let speechHoldsMusic = false;
 
 const els = {
   loginScreen: document.getElementById("loginScreen"),
@@ -777,7 +781,9 @@ function syncBgMusic() {
   const settingsOpen = !els.settingsOverlay.hidden;
   const overlayUp = !els.resetOverlay.hidden || factsPopOpen();
   const shouldPlay =
-    state.sound && (settingsOpen || !els.overlay.hidden || (onPlay && !state.timerPaused && !overlayUp));
+    state.sound &&
+    !speechHoldsMusic &&
+    (settingsOpen || !els.overlay.hidden || (onPlay && !state.timerPaused && !overlayUp));
   if (shouldPlay) {
     const play = els.bgMusic.play();
     if (play && typeof play.catch === "function") play.catch(() => {});
@@ -1105,8 +1111,91 @@ function clearLit() {
   litFactEls().forEach((el) => el.classList.remove("is-lit"));
 }
 
-function cancelSpeech() {
+function getNativeTts() {
+  if (nativeTtsPlugin) return nativeTtsPlugin;
+  const cap = window.Capacitor;
+  if (!cap || typeof cap.isNativePlatform !== "function" || !cap.isNativePlatform()) return null;
+  if (typeof cap.isPluginAvailable === "function" && !cap.isPluginAvailable("TextToSpeech")) return null;
+  if (typeof cap.registerPlugin !== "function") return null;
+  nativeTtsPlugin = cap.registerPlugin("TextToSpeech");
+  return nativeTtsPlugin;
+}
+
+function canSpeak() {
+  return !!(getNativeTts() || window.speechSynthesis);
+}
+
+function holdMusicForSpeech() {
+  if (speechHoldsMusic || !els.bgMusic || els.bgMusic.paused) return;
+  speechHoldsMusic = true;
+  els.bgMusic.pause();
+}
+
+function releaseMusicAfterSpeech() {
+  if (!speechHoldsMusic) return;
+  speechHoldsMusic = false;
+  syncBgMusic();
+}
+
+function stopSpeechEngine() {
+  const tts = getNativeTts();
+  if (tts) tts.stop().catch(() => {});
   if (window.speechSynthesis) window.speechSynthesis.cancel();
+}
+
+function cancelSpeech() {
+  speechToken += 1;
+  stopSpeechEngine();
+  releaseMusicAfterSpeech();
+}
+
+function speakNative(tts, text, interrupt) {
+  const options = {
+    text: String(text),
+    lang: "en-US",
+    rate: speechSettings().rate,
+    category: "playback",
+    queueStrategy: interrupt ? 0 : 1,
+  };
+  return tts.speak(options).catch(() => {
+    options.lang = "en";
+    return new Promise((resolve) => window.setTimeout(resolve, 400)).then(() => tts.speak(options));
+  });
+}
+
+function speakWeb(text, onEnd) {
+  const synth = window.speechSynthesis;
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.rate = speechSettings().rate;
+  const voices = synth.getVoices();
+  const en = voices.find((voice) => /^en\b/i.test(voice.lang || ""));
+  if (en) utter.voice = en;
+  if (onEnd) {
+    utter.onend = onEnd;
+    utter.onerror = onEnd;
+  }
+  synth.speak(utter);
+  if (synth.paused) synth.resume();
+}
+
+function speakUtterance(text, { interrupt = true, onEnd } = {}) {
+  if (!state.sound || !canSpeak()) return;
+  if (interrupt) {
+    speechToken += 1;
+    stopSpeechEngine();
+  }
+  const token = speechToken;
+  holdMusicForSpeech();
+  const done = () => {
+    if (token !== speechToken) return;
+    if (onEnd) onEnd();
+  };
+  const tts = getNativeTts();
+  if (tts) {
+    speakNative(tts, text, interrupt).then(done).catch(done);
+    return;
+  }
+  speakWeb(text, done);
 }
 
 function clearGradeTimeout() {
@@ -1124,11 +1213,7 @@ function clearFactRead() {
 }
 
 function speakFact(text) {
-  if (!state.sound || !window.speechSynthesis) return;
-  cancelSpeech();
-  const utter = new SpeechSynthesisUtterance(text);
-  utter.rate = speechSettings().rate;
-  window.speechSynthesis.speak(utter);
+  speakUtterance(text, { interrupt: true });
 }
 
 function playFactRead(problem) {
@@ -1145,10 +1230,8 @@ function playFactRead(problem) {
     } else {
       state.readTimers.push(
         window.setTimeout(() => {
-          if (!state.sound || !window.speechSynthesis) return;
-          const utter = new SpeechSynthesisUtterance(phrase);
-          utter.rate = speech.rate;
-          window.speechSynthesis.speak(utter);
+          if (!state.sound || !canSpeak()) return;
+          speakUtterance(phrase, { interrupt: false });
         }, passStart)
       );
     }
@@ -1387,15 +1470,14 @@ function showCorrectionTip() {
     continueFromCorrectionTip();
   };
 
-  if (state.sound && window.speechSynthesis) {
-    cancelSpeech();
-    const utter = new SpeechSynthesisUtterance(CORRECTION_TIP_SPEECH);
-    utter.rate = speechSettings().rate;
-    utter.onend = () => {
-      clearCorrectionTipTimeout();
-      state.correctionTipTimeoutId = window.setTimeout(finish, CORRECTION_TIP_HOLD_MS);
-    };
-    window.speechSynthesis.speak(utter);
+  if (state.sound && canSpeak()) {
+    speakUtterance(CORRECTION_TIP_SPEECH, {
+      interrupt: true,
+      onEnd: () => {
+        clearCorrectionTipTimeout();
+        state.correctionTipTimeoutId = window.setTimeout(finish, CORRECTION_TIP_HOLD_MS);
+      },
+    });
     state.correctionTipTimeoutId = window.setTimeout(
       finish,
       tokenMs(CORRECTION_TIP_SPEECH) + CORRECTION_TIP_HOLD_MS + 2500
@@ -1421,13 +1503,13 @@ function continueFromCorrectionTip() {
   clearCorrectionTipTimeout();
   els.correctionTipOverlay.hidden = true;
   cancelSpeech();
-  syncBgMusic();
   if (!state.problem) {
     nextProblem();
     return;
   }
   const delay = Math.max(MISS_PAUSE_MS, playFactRead(state.problem) + speechSettings().readHoldMs);
   scheduleAfterGrade(delay);
+  syncBgMusic();
 }
 
 function maybeLevelUp() {
@@ -1815,3 +1897,10 @@ els.bgMusic.addEventListener("ended", () => {
 fillSongList();
 renderLogin();
 showScreen("login");
+if (window.speechSynthesis && typeof window.speechSynthesis.getVoices === "function") {
+  window.speechSynthesis.getVoices();
+}
+const ttsWarmup = getNativeTts();
+if (ttsWarmup && typeof ttsWarmup.getSupportedLanguages === "function") {
+  ttsWarmup.getSupportedLanguages().catch(() => {});
+}
