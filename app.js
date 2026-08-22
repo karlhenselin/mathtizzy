@@ -1114,22 +1114,28 @@ function clearLit() {
   litFactEls().forEach((el) => el.classList.remove("is-lit"));
 }
 
+function getCapacitorPlugin(name) {
+  const cap = window.Capacitor;
+  if (!cap) return null;
+  const injected = cap.Plugins && cap.Plugins[name];
+  if (injected) return injected;
+  if (typeof cap.registerPlugin !== "function") return null;
+  if (typeof cap.isPluginAvailable === "function" && !cap.isPluginAvailable(name)) return null;
+  return cap.registerPlugin(name);
+}
+
 function getNativeTts() {
   if (nativeTtsPlugin) return nativeTtsPlugin;
-  const cap = window.Capacitor;
-  if (!cap || typeof cap.isNativePlatform !== "function" || !cap.isNativePlatform()) return null;
-  if (typeof cap.isPluginAvailable === "function" && !cap.isPluginAvailable("TextToSpeech")) return null;
-  if (typeof cap.registerPlugin !== "function") return null;
-  nativeTtsPlugin = cap.registerPlugin("TextToSpeech");
+  const plugin = getCapacitorPlugin("TextToSpeech");
+  if (!plugin || typeof plugin.speak !== "function") return null;
+  nativeTtsPlugin = plugin;
   return nativeTtsPlugin;
 }
 
 function getAppVersionPlugin() {
-  const cap = window.Capacitor;
-  if (!cap || typeof cap.isNativePlatform !== "function" || !cap.isNativePlatform()) return null;
-  if (typeof cap.getPlatform === "function" && cap.getPlatform() !== "android") return null;
-  if (typeof cap.registerPlugin !== "function") return null;
-  return cap.registerPlugin("AppVersion");
+  const plugin = getCapacitorPlugin("AppVersion");
+  if (!plugin || typeof plugin.getVersionName !== "function") return null;
+  return plugin;
 }
 
 function fillAppVersion() {
