@@ -10,7 +10,7 @@ Open `index.html` in a browser, or serve the folder with any static host.
 2. Start practicing. Enter answers with the on-screen pad or the keyboard.
 3. Level up when every fact on the current grid is green, or stay and keep practicing.
 
-A fact turns **green** when its average correct time is at or under the maximum-time setting **and** it has at least **5 correct answers per 1 miss**. The Facts map next to the mastery bar shows unseen (white), shaky (red–gold), and fluent (green) cells.
+A fact turns **green** when its average correct time is at or under the maximum-time setting **and** it has **4 recent correct answers** with **at most one miss** in the last 5 (so 4 in a row with no misses counts). The Facts map next to the mastery bar shows unseen (white), shaky (red–gold), and fluent (green) cells.
 
 Missed facts are spoken aloud (if sound is on) and highlighted in reading order — once to listen, then again to read along. The first miss each day shows a short tip explaining that. Sound off still walks the highlights at the same pace.
 

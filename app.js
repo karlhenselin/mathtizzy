@@ -8,7 +8,8 @@ const FAST_SEC_DEFAULT = 3.5;
 const FACT_READ_COUNT = 2;
 const MUSIC_VOL_DEFAULT = 0.7;
 const MUSIC_FADE_MS = 900;
-const FACT_GREEN_RATIO = 5;
+const FACT_GREEN_WINDOW = 5;
+const FACT_GREEN_MIN_RIGHT = 4;
 const WHITE_WEIGHT = 12;
 const GREEN_WEIGHT = 0.06;
 const LOW_ACC_EXTRA = 60;
@@ -229,8 +230,10 @@ const els = {
   masteryLabel: document.getElementById("masteryLabel"),
   factsWrap: document.getElementById("factsWrap"),
   factsBtn: document.getElementById("factsBtn"),
+  factsPop: document.getElementById("factsPop"),
   factsPopTitle: document.getElementById("factsPopTitle"),
   factsMaps: document.getElementById("factsMaps"),
+  factTip: document.getElementById("factTip"),
   streakValue: document.getElementById("streakValue"),
   accuracyValue: document.getElementById("accuracyValue"),
   timerHud: document.getElementById("timerHud"),
@@ -309,7 +312,7 @@ function isAddOrSub(op) {
 }
 
 function emptyFactStats() {
-  return { right: 0, wrong: 0, correctMs: 0 };
+  return { right: 0, wrong: 0, correctMs: 0, recent: [] };
 }
 
 function getFactStats(key) {
@@ -334,21 +337,61 @@ function factWeight(stats) {
   return weight;
 }
 
-function normalizeFactScores(raw) {
+function clampRecent(recent) {
+  if (!Array.isArray(recent)) return [];
+  const out = [];
+  for (const bit of recent) out.push(bit ? 1 : 0);
+  if (out.length > FACT_GREEN_WINDOW) return out.slice(-FACT_GREEN_WINDOW);
+  return out;
+}
+
+function seedRecentFromLifetime(right, wrong, correctMs, fastSeconds) {
+  if (right > 0) {
+    const avg = correctMs / right;
+    const fastEnough = avg <= fastSeconds * 1000;
+    const oldAccurate = !wrong || right >= 5 * wrong;
+    if (fastEnough && oldAccurate) return Array(FACT_GREEN_WINDOW).fill(1);
+  }
+  const total = right + wrong;
+  if (!total) return [];
+  const fill = Math.min(FACT_GREEN_WINDOW, total);
+  const wrongs = Math.min(wrong, fill);
+  const rights = fill - wrongs;
+  const recent = [];
+  for (let i = 0; i < wrongs; i += 1) recent.push(0);
+  for (let i = 0; i < rights; i += 1) recent.push(1);
+  return recent;
+}
+
+function normalizeRecent(value, right, wrong, correctMs, fastSeconds) {
+  if (Array.isArray(value) && value.length) return clampRecent(value);
+  return seedRecentFromLifetime(right, wrong, correctMs, fastSeconds);
+}
+
+function normalizeFactScores(raw, fastSeconds = FAST_SEC_DEFAULT) {
   const out = {};
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out;
+  const limit = clampFastSeconds(fastSeconds);
   for (const [key, value] of Object.entries(raw)) {
     if (value && typeof value === "object" && !Array.isArray(value)) {
+      const right = Math.max(0, Number(value.right) || 0);
+      const wrong = Math.max(0, Number(value.wrong) || 0);
+      const correctMs = Math.max(0, Number(value.correctMs) || 0);
       out[key] = {
-        right: Math.max(0, Number(value.right) || 0),
-        wrong: Math.max(0, Number(value.wrong) || 0),
-        correctMs: Math.max(0, Number(value.correctMs) || 0),
+        right,
+        wrong,
+        correctMs,
+        recent: normalizeRecent(value.recent, right, wrong, correctMs, limit),
       };
     } else if (typeof value === "number") {
-      out[key] =
-        value >= 0
-          ? { right: value, wrong: 0, correctMs: 0 }
-          : { right: 0, wrong: 1, correctMs: 0 };
+      const right = value >= 0 ? value : 0;
+      const wrong = value >= 0 ? 0 : 1;
+      out[key] = {
+        right,
+        wrong,
+        correctMs: 0,
+        recent: seedRecentFromLifetime(right, wrong, 0, limit),
+      };
     }
   }
   return out;
@@ -390,10 +433,17 @@ function getLevelFacts(level) {
   return level.ops.flatMap((op) => getFactPool(level, op));
 }
 
+function factRecentCorrect(stats) {
+  const recent = stats?.recent;
+  if (!recent || !recent.length) return 0;
+  let n = 0;
+  for (const bit of recent) if (bit) n += 1;
+  return n;
+}
+
 function factAccuracyT(stats) {
-  if (!stats || !stats.right) return 0;
-  if (!stats.wrong) return 1;
-  return Math.min(1, stats.right / (FACT_GREEN_RATIO * stats.wrong));
+  if (!stats) return 0;
+  return Math.min(1, factRecentCorrect(stats) / FACT_GREEN_MIN_RIGHT);
 }
 
 function factSpeedT(stats) {
@@ -405,7 +455,7 @@ function factSpeedT(stats) {
 
 function isFactGreen(stats) {
   const avg = factAvgMs(stats);
-  return avg != null && avg <= fastMs() && factAccuracyT(stats) >= 1;
+  return avg != null && avg <= fastMs() && factRecentCorrect(stats) >= FACT_GREEN_MIN_RIGHT;
 }
 
 function levelMastery(level) {
@@ -469,14 +519,18 @@ function takeDueRetry(level) {
 function recordFact(problem, correct, elapsedMs) {
   const key = factKey(problem);
   const stats = { ...getFactStats(key) };
+  const recent = [...(stats.recent ?? [])];
   if (correct) {
     stats.right += 1;
     stats.correctMs += Math.round(Math.max(0, Math.min(elapsedMs, FACT_TIME_CAP_MS)));
     dequeueRetry(problem);
+    recent.push(1);
   } else {
     stats.wrong += 1;
     if (isAddOrSub(problem.op)) queueRetry(problem);
+    recent.push(0);
   }
+  stats.recent = clampRecent(recent);
   state.factScores[key] = stats;
 }
 
@@ -623,7 +677,7 @@ function applyProgress(data = {}) {
     heldAtLevel: data.heldAtLevel ?? false,
     slowRun: Number(data.slowRun) || 0,
     attemptsSinceBump: Number(data.attemptsSinceBump) || 0,
-    factScores: normalizeFactScores(data.factScores),
+    factScores: normalizeFactScores(data.factScores, data.fastSeconds),
     retrySoon: Array.isArray(data.retrySoon) ? data.retrySoon : [],
   });
   clearSession();
@@ -980,6 +1034,8 @@ function factTooltip(fact) {
   const stats = state.factScores[factKey(fact)];
   if (!stats || (!stats.right && !stats.wrong)) return label;
   const parts = [`${stats.right} right`, `${stats.wrong} wrong`];
+  const recent = stats.recent ?? [];
+  if (recent.length) parts.push(`${factRecentCorrect(stats)}/${recent.length} recent`);
   const avg = factAvgMs(stats);
   if (avg != null) parts.push(`${(avg / 1000).toFixed(1)}s avg`);
   return `${label} — ${parts.join(", ")}`;
@@ -1042,7 +1098,10 @@ function makeFactMap(level, op) {
             : { a: row, b: col, op, answer: op === "+" ? row + col : op === "-" ? row - col : row * col };
         cell.className = "fact-cell";
         cell.style.background = factFill(factKey(fact));
-        cell.title = factTooltip(fact);
+        const tip = factTooltip(fact);
+        cell.dataset.tip = tip;
+        cell.setAttribute("aria-label", tip);
+        if (window.matchMedia("(hover: hover)").matches) cell.title = tip;
       }
       table.appendChild(cell);
     });
@@ -1060,13 +1119,49 @@ function factsPopOpen() {
   );
 }
 
+function hideFactTip() {
+  els.factTip.hidden = true;
+  els.factTip.textContent = "";
+  els.factsMaps.querySelector(".fact-cell.is-tipped")?.classList.remove("is-tipped");
+}
+
+function positionFactTip(cell) {
+  const pad = 8;
+  const cellRect = cell.getBoundingClientRect();
+  const popRect = els.factsPop.getBoundingClientRect();
+  els.factTip.style.left = "0px";
+  els.factTip.style.top = "0px";
+  const tipRect = els.factTip.getBoundingClientRect();
+  let left = cellRect.left + cellRect.width / 2 - popRect.left - tipRect.width / 2;
+  let top = cellRect.bottom - popRect.top + 6;
+  left = Math.max(pad, Math.min(left, popRect.width - tipRect.width - pad));
+  if (top + tipRect.height + pad > popRect.height) {
+    top = cellRect.top - popRect.top - tipRect.height - 6;
+  }
+  top = Math.max(pad, Math.min(top, popRect.height - tipRect.height - pad));
+  els.factTip.style.left = `${left}px`;
+  els.factTip.style.top = `${top}px`;
+}
+
+function showFactTip(cell) {
+  const text = cell.dataset.tip;
+  if (!text) return;
+  hideFactTip();
+  cell.classList.add("is-tipped");
+  els.factTip.textContent = text;
+  els.factTip.hidden = false;
+  positionFactTip(cell);
+}
+
 function renderFactsMap() {
+  hideFactTip();
   const level = currentLevel();
   els.factsPopTitle.textContent = level.name;
   els.factsMaps.replaceChildren(...level.ops.map((op) => makeFactMap(level, op)));
 }
 
 function setFactsOpen(open) {
+  if (!open) hideFactTip();
   els.factsWrap.classList.toggle("is-open", open);
   els.factsBtn.setAttribute("aria-expanded", String(open));
   if (open) renderFactsMap();
@@ -1750,6 +1845,16 @@ els.factsBtn.addEventListener("click", (event) => {
   }
   setFactsOpen(!els.factsWrap.classList.contains("is-open"));
 });
+els.factsPop.addEventListener("click", (event) => {
+  const cell = event.target.closest(".fact-cell[data-tip]");
+  if (!cell) {
+    hideFactTip();
+    return;
+  }
+  if (cell.classList.contains("is-tipped")) hideFactTip();
+  else showFactTip(cell);
+});
+els.factsMaps.addEventListener("scroll", hideFactTip, { passive: true });
 document.addEventListener("click", (event) => {
   if (!els.factsWrap.contains(event.target)) setFactsOpen(false);
 });

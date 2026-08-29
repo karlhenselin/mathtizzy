@@ -442,6 +442,33 @@ body {
   min-width: 0;
   aspect-ratio: 1;
   background: #fff;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.fact-cell[data-tip] {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.fact-cell.is-tipped {
+  box-shadow: inset 0 0 0 2px var(--ink);
+}
+
+.fact-tip {
+  position: absolute;
+  z-index: 2;
+  max-width: min(16rem, calc(100% - 16px));
+  margin: 0;
+  padding: 8px 10px;
+  background: var(--ink);
+  color: var(--cream);
+  border-radius: 10px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.25;
+  box-shadow: var(--shadow);
+  pointer-events: none;
 }
 
 .fact-cell.is-axis {
