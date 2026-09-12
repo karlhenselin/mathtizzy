@@ -26,7 +26,7 @@ WHY IT WORKS
 • Missed facts are read aloud and highlighted so kids can see and hear the correct answer, then read along
 
 LEVELS
-From Tiny Totals through Times Tables, Fact Mixer, timed Speed Facts, and Mathlete challenges—twelve levels that grow with your child.
+From Tiny Totals through Times Tables, Fact Mixer, timed Speed Facts, and Mathlete challenges—nineteen levels that grow with your child.
 
 FEATURES
 • Multiple players on one device—each with their own progress

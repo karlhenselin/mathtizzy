@@ -20,9 +20,12 @@ const SLOW_BUMP_STREAK = 4;
 const SLOW_BUMP_MIN_RIGHTS = 8;
 const SLOW_BUMP_COOLDOWN = 6;
 const SLOW_NEAR_RATIO = 0.9;
-const FACT_RED = [231, 111, 81];
-const FACT_MID = [244, 208, 96];
-const FACT_GREEN = [42, 157, 143];
+/** Never-missed facts: very light → darker green as they firm up. */
+const FACT_CLEAN_LO = [228, 248, 234];
+const FACT_CLEAN_HI = [72, 160, 110];
+/** Ever-missed facts: orange → yellow by right/(right+wrong). */
+const FACT_MISS_LO = [232, 140, 74];
+const FACT_MISS_HI = [244, 208, 96];
 const SONG_RANDOM = "random";
 const SONGS = [
   { id: "retro", name: "Retro Platforming", file: "music/2019-12-11_-_Retro_Platforming_-_David_Fesliyan.mp3" },
@@ -118,13 +121,26 @@ const CORRECTION_TIP_HOLD_MS = 400;
 const CORRECTION_TIP_MUTED_MS = 3200;
 const factPoolCache = new Map();
 
+const PROGRESS_VERSION = 2;
+/** Old levelIndex (v1, 12 levels) → new index after early +/−/× ladders. */
+const LEVEL_INDEX_V1_TO_V2 = [0, 3, 7, 8, 9, 12, 13, 14, 15, 16, 17, 18];
+/** New level indexes entered via 1→2 / 2→3 / 3→4 style ladder steps. */
+const LADDER_REMASTER_TARGETS = new Set([1, 2, 3, 5, 6, 7, 10, 11, 12]);
+
 const LEVELS = [
-  { name: "Tiny Totals", blurb: "Add numbers up to 5.", ops: ["+"], min: 1, max: 5 },
-  { name: "Adding Up", blurb: "Addition facts through 10.", ops: ["+"], min: 1, max: 10 },
-  { name: "Take Away", blurb: "Subtraction without negatives.", ops: ["-"], min: 1, max: 10 },
+  { name: "Tiny Totals 1", blurb: "Add numbers up to 4.", ops: ["+"], min: 1, max: 4 },
+  { name: "Tiny Totals 2", blurb: "Add numbers up to 6.", ops: ["+"], min: 1, max: 6 },
+  { name: "Adding Up 1", blurb: "Addition facts through 8.", ops: ["+"], min: 1, max: 8 },
+  { name: "Adding Up 2", blurb: "Addition facts through 10.", ops: ["+"], min: 1, max: 10 },
+  { name: "Take Away 1", blurb: "Subtraction up to 4, without negatives.", ops: ["-"], min: 1, max: 4 },
+  { name: "Take Away 2", blurb: "Subtraction up to 6, without negatives.", ops: ["-"], min: 1, max: 6 },
+  { name: "Take Away 3", blurb: "Subtraction up to 8, without negatives.", ops: ["-"], min: 1, max: 8 },
+  { name: "Take Away 4", blurb: "Subtraction up to 10, without negatives.", ops: ["-"], min: 1, max: 10 },
   { name: "Plus & Minus", blurb: "Mix addition and subtraction.", ops: ["+", "-"], min: 1, max: 12 },
-  { name: "Times Starter", blurb: "Multiplication facts through 5.", ops: ["×"], min: 1, max: 5 },
-  { name: "Times Tables", blurb: "Multiplication facts through 10.", ops: ["×"], min: 1, max: 10 },
+  { name: "Times Starter 1", blurb: "Multiplication facts through 4.", ops: ["×"], min: 1, max: 4 },
+  { name: "Times Starter 2", blurb: "Multiplication facts through 6.", ops: ["×"], min: 1, max: 6 },
+  { name: "Times Tables 1", blurb: "Multiplication facts through 8.", ops: ["×"], min: 1, max: 8 },
+  { name: "Times Tables 2", blurb: "Multiplication facts through 10.", ops: ["×"], min: 1, max: 10 },
   { name: "Fair Shares", blurb: "Division facts with whole-number answers.", ops: ["÷"], min: 1, max: 10 },
   { name: "Fact Mixer", blurb: "All four operations through 12.", ops: ["+", "-", "×", "÷"], min: 1, max: 12 },
   { name: "Bigger Bites", blurb: "Larger addends, still-solid facts.", ops: ["+", "-", "×", "÷"], min: 2, max: 20, mulMax: 12 },
@@ -458,14 +474,35 @@ function isFactGreen(stats) {
   return avg != null && avg <= fastMs() && factRecentCorrect(stats) >= FACT_GREEN_MIN_RIGHT;
 }
 
+/** 0–1 progress toward mastery for one fact (partial credit before green). */
+function factMasteryProgress(stats) {
+  if (isFactGreen(stats)) return 1;
+  if (!stats || (!stats.right && !stats.wrong)) return 0;
+  const recentShare = Math.min(1, factRecentCorrect(stats) / FACT_GREEN_MIN_RIGHT);
+  const speedShare = stats.right ? Math.max(0, Math.min(1, factSpeedT(stats))) : 0;
+  return Math.min(0.95, (recentShare + speedShare) / 2);
+}
+
+function remasterEverWrongFacts(level) {
+  for (const fact of getLevelFacts(level)) {
+    const key = factKey(fact);
+    const stats = state.factScores[key];
+    if (!stats || !(stats.wrong > 0)) continue;
+    state.factScores[key] = { ...stats, recent: [] };
+  }
+}
+
 function levelMastery(level) {
   const facts = getLevelFacts(level);
   const total = facts.length;
   let green = 0;
+  let progressSum = 0;
   for (const fact of facts) {
-    if (isFactGreen(state.factScores[factKey(fact)])) green += 1;
+    const stats = state.factScores[factKey(fact)];
+    if (isFactGreen(stats)) green += 1;
+    progressSum += factMasteryProgress(stats);
   }
-  const percent = !total ? 0 : green >= total ? 100 : Math.min(99, Math.round((green / total) * 100));
+  const percent = !total ? 0 : green >= total ? 100 : Math.min(99, Math.round((progressSum / total) * 100));
   return { green, total, percent };
 }
 
@@ -620,6 +657,7 @@ function namesMatch(left, right) {
 
 function freshProgress() {
   return {
+    progressVersion: PROGRESS_VERSION,
     levelIndex: 0,
     streak: 0,
     bestStreak: 0,
@@ -636,6 +674,16 @@ function freshProgress() {
     factScores: {},
     retrySoon: [],
   };
+}
+
+function migrateLevelIndex(data = {}) {
+  const version = Number(data.progressVersion) || 1;
+  let levelIndex = data.levelIndex ?? 0;
+  if (version < 2) {
+    const mapped = LEVEL_INDEX_V1_TO_V2[levelIndex];
+    levelIndex = mapped == null ? LEVELS.length - 1 : mapped;
+  }
+  return Math.max(0, Math.min(levelIndex, LEVELS.length - 1));
 }
 
 function clearSession() {
@@ -662,9 +710,11 @@ function clearSession() {
 }
 
 function applyProgress(data = {}) {
+  const needsMigrate = (Number(data.progressVersion) || 1) < PROGRESS_VERSION;
   const defaults = freshProgress();
   Object.assign(state, defaults, {
-    levelIndex: data.levelIndex ?? 0,
+    progressVersion: PROGRESS_VERSION,
+    levelIndex: migrateLevelIndex(data),
     streak: data.streak ?? 0,
     bestStreak: data.bestStreak ?? 0,
     correct: data.correct ?? 0,
@@ -681,6 +731,7 @@ function applyProgress(data = {}) {
     retrySoon: Array.isArray(data.retrySoon) ? data.retrySoon : [],
   });
   clearSession();
+  if (needsMigrate) save();
 }
 
 function readUsers() {
@@ -728,6 +779,7 @@ function takeLegacyProgress() {
 
 function progressSnapshot() {
   return {
+    progressVersion: PROGRESS_VERSION,
     levelIndex: state.levelIndex,
     streak: state.streak,
     bestStreak: state.bestStreak,
@@ -760,9 +812,10 @@ function showScreen(name) {
 
 function userSummary(user) {
   const progress = readProgress(user.id) ?? freshProgress();
-  const level = LEVELS[Math.min(progress.levelIndex ?? 0, LEVELS.length - 1)];
+  const levelIndex = migrateLevelIndex(progress);
+  const level = LEVELS[levelIndex];
   const solved = progress.correct ?? 0;
-  if (!solved && !progress.levelIndex) return "New player";
+  if (!solved && !levelIndex) return "New player";
   return `${level.name} · ${solved} solved`;
 }
 
@@ -1023,10 +1076,15 @@ function rgbCss(rgb) {
 function factFill(key) {
   const stats = state.factScores[key];
   if (!stats || (!stats.right && !stats.wrong)) return "#ffffff";
-  if (!stats.right) return rgbCss(FACT_RED);
-  const u = Math.min(factSpeedT(stats), factAccuracyT(stats));
-  if (u < 0.5) return rgbCss(mixRgb(FACT_RED, FACT_MID, u * 2));
-  return rgbCss(mixRgb(FACT_MID, FACT_GREEN, (u - 0.5) * 2));
+
+  if (!(stats.wrong > 0)) {
+    const t = isFactGreen(stats) ? 1 : Math.min(factSpeedT(stats), factAccuracyT(stats));
+    return rgbCss(mixRgb(FACT_CLEAN_LO, FACT_CLEAN_HI, Math.max(0.12, t)));
+  }
+
+  const attempts = stats.right + stats.wrong;
+  const ratio = attempts ? stats.right / attempts : 0;
+  return rgbCss(mixRgb(FACT_MISS_LO, FACT_MISS_HI, ratio));
 }
 
 function factTooltip(fact) {
@@ -1980,6 +2038,9 @@ function continueFromOverlay() {
   if (state.levelIndex < LEVELS.length - 1) {
     state.levelIndex += 1;
     state.heldAtLevel = false;
+    if (LADDER_REMASTER_TARGETS.has(state.levelIndex)) {
+      remasterEverWrongFacts(currentLevel());
+    }
   } else {
     state.heldAtLevel = true;
   }

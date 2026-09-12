@@ -10,26 +10,33 @@ Open `index.html` in a browser, or serve the folder with any static host.
 2. Start practicing. Enter answers with the on-screen pad or the keyboard.
 3. Level up when every fact on the current grid is green, or stay and keep practicing.
 
-A fact turns **green** when its average correct time is at or under the maximum-time setting **and** it has **4 recent correct answers** with **at most one miss** in the last 5 (so 4 in a row with no misses counts). The Facts map next to the mastery bar shows unseen (white), shaky (red–gold), and fluent (green) cells.
+A fact turns **green** (mastered) when its average correct time is at or under the maximum-time setting **and** it has **4 recent correct answers** with **at most one miss** in the last 5 (so 4 in a row with no misses counts). The mastery bar fills with partial credit as facts improve, not only when they turn fully mastered. The Facts map shows unseen (white), never-missed progress (light greens), and ever-missed accuracy (orange → yellow).
 
 Missed facts are spoken aloud (if sound is on) and highlighted in reading order — once to listen, then again to read along. The first miss each day shows a short tip explaining that. Sound off still walks the highlights at the same pace.
 
 ## Levels
 
-1. Tiny Totals — addition up to 5
-2. Adding Up — addition through 10
-3. Take Away — subtraction without negatives
-4. Plus & Minus — mixed + and − through 12
-5. Times Starter — multiplication through 5
-6. Times Tables — multiplication through 10
-7. Fair Shares — division with whole-number answers
-8. Fact Mixer — all four operations through 12
-9. Bigger Bites — larger numbers, mixed operations
-10. Two-Digit Mix — two-digit addition and subtraction
-11. Speed Facts — mixed facts with a 7-second clock
-12. Mathlete — expert mix with a 5-second clock
+1. Tiny Totals 1 — addition up to 4
+2. Tiny Totals 2 — addition up to 6
+3. Adding Up 1 — addition through 8
+4. Adding Up 2 — addition through 10
+5. Take Away 1 — subtraction up to 4
+6. Take Away 2 — subtraction up to 6
+7. Take Away 3 — subtraction up to 8
+8. Take Away 4 — subtraction up to 10
+9. Plus & Minus — mixed + and − through 12
+10. Times Starter 1 — multiplication through 4
+11. Times Starter 2 — multiplication through 6
+12. Times Tables 1 — multiplication through 8
+13. Times Tables 2 — multiplication through 10
+14. Fair Shares — division with whole-number answers
+15. Fact Mixer — all four operations through 12
+16. Bigger Bites — larger numbers, mixed operations
+17. Two-Digit Mix — two-digit addition and subtraction
+18. Speed Facts — mixed facts with a 7-second clock
+19. Mathlete — expert mix with a 5-second clock
 
-Later levels reuse shaky facts more often. Green facts almost never appear.
+On early + / − / × ladder steps, facts that were ever missed lose their recent streak and must be remastered. Later levels reuse shaky facts more often. Green facts almost never appear.
 
 ## Settings
 

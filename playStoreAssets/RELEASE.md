@@ -42,7 +42,7 @@ Already in place:
 
 - Capacitor 8 Android project at `android/`, module `:app`
 - App id `com.petraguardsoftware.mathtizzy`
-- `versionCode 2` / `versionName "1.0.1"` in `android/app/build.gradle`
+- `versionCode 4` / `versionName "1.0.3"` in `android/app/build.gradle`
 - Web copy + sync: `npm run cap:sync` (copies into `www/`, then into the native project)
 - Play listing copy and graphics in `playStoreAssets/`
 
@@ -177,7 +177,7 @@ android {
 
 `storeFile` is already an absolute path, so `file(...)` is enough. Do not put passwords in `build.gradle`.
 
-Bump `versionCode` / `versionName` in the same file for every Play upload. Play rejects a `versionCode` that was already used. Current values: `2` / `"1.0.1"`.
+Bump `versionCode` / `versionName` in the same file for every Play upload. Play rejects a `versionCode` that was already used. Current values: `4` / `"1.0.3"`.
 
 ---
 

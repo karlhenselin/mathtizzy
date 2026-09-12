@@ -403,12 +403,12 @@ body {
   background: #fff;
 }
 
-.swatch-miss {
-  background: var(--coral);
+.swatch-clean {
+  background: rgb(72, 160, 110);
 }
 
-.swatch-solid {
-  background: var(--teal);
+.swatch-miss {
+  background: rgb(232, 140, 74);
 }
 
 .facts-maps {

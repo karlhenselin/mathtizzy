@@ -13,7 +13,7 @@
       rel="stylesheet"
     />
     <link rel="icon" href="favicon.svg?v=2" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css?v=6" />
+    <link rel="stylesheet" href="styles.css?v=8" />
   </head>
   <body>
     <div class="bg-glow" aria-hidden="true"></div>
@@ -75,7 +75,7 @@
           <button class="icon-btn" id="homeBtn" type="button" aria-label="Back to home">←</button>
           <div class="level-meta">
             <p class="level-kicker" id="levelKicker">Level 1</p>
-            <h2 class="level-name" id="levelName">Tiny Totals</h2>
+            <h2 class="level-name" id="levelName">Tiny Totals 1</h2>
           </div>
           <div class="play-tools">
             <button class="icon-btn" id="settingsBtn" type="button" aria-label="Settings">⚙</button>
@@ -96,8 +96,8 @@
                   <p class="facts-pop-title" id="factsPopTitle">Level facts</p>
                   <p class="facts-legend">
                     <span class="swatch swatch-new"></span> new
-                    <span class="swatch swatch-miss"></span> shaky
-                    <span class="swatch swatch-solid"></span> fluent
+                    <span class="swatch swatch-clean"></span> clean
+                    <span class="swatch swatch-miss"></span> missed
                   </p>
                 </div>
                 <div class="facts-maps" id="factsMaps"></div>
@@ -205,7 +205,7 @@
       <div class="overlay-card" role="dialog" aria-modal="true" aria-labelledby="resetTitle">
         <p class="eyebrow">Hold on</p>
         <h2 id="resetTitle">Reset progress?</h2>
-        <p>This clears <span id="resetUserName">this player</span>'s level, streak, solved count, and missed-fact review. Other players are left alone. They will start over at Tiny Totals.</p>
+        <p>This clears <span id="resetUserName">this player</span>'s level, streak, solved count, and missed-fact review. Other players are left alone. They will start over at Tiny Totals 1.</p>
         <div class="overlay-actions">
           <button class="btn btn-primary" id="resetCancelBtn" type="button">Keep my progress</button>
           <button class="btn btn-danger" id="resetConfirmBtn" type="button">Reset everything</button>
@@ -225,6 +225,6 @@
       src=""
       preload="auto"
     ></audio>
-    <script src="app.js?v=29" defer></script>
+    <script src="app.js?v=31" defer></script>
   </body>
 </html>
