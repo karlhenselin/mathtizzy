@@ -193,6 +193,24 @@ body {
   gap: 10px;
 }
 
+.android-beta {
+  margin: 24px 0 0;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: var(--muted);
+  text-align: center;
+}
+
+.android-beta a {
+  color: var(--teal);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.android-beta a:hover {
+  text-decoration: underline;
+}
+
 .btn {
   appearance: none;
   border: 0;

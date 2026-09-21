@@ -10,6 +10,8 @@ const MUSIC_VOL_DEFAULT = 0.7;
 const MUSIC_FADE_MS = 900;
 const FACT_GREEN_WINDOW = 5;
 const FACT_GREEN_MIN_RIGHT = 4;
+const FACT_FAST_MASTER_RIGHTS = 2;
+const FACT_FAST_MASTER_RATIO = 0.75;
 const WHITE_WEIGHT = 12;
 const GREEN_WEIGHT = 0.06;
 const LOW_ACC_EXTRA = 60;
@@ -215,6 +217,7 @@ const state = {
 let nativeTtsPlugin;
 let speechToken = 0;
 let speechHoldsMusic = false;
+let currentVoiceClip = null;
 let appInactive = false;
 
 const els = {
@@ -471,7 +474,15 @@ function factSpeedT(stats) {
 
 function isFactGreen(stats) {
   const avg = factAvgMs(stats);
-  return avg != null && avg <= fastMs() && factRecentCorrect(stats) >= FACT_GREEN_MIN_RIGHT;
+  if (avg == null) return false;
+  if (
+    !(stats.wrong > 0) &&
+    stats.right >= FACT_FAST_MASTER_RIGHTS &&
+    avg < fastMs() * FACT_FAST_MASTER_RATIO
+  ) {
+    return true;
+  }
+  return avg <= fastMs() && factRecentCorrect(stats) >= FACT_GREEN_MIN_RIGHT;
 }
 
 /** 0–1 progress toward mastery for one fact (partial credit before green). */
@@ -1330,7 +1341,21 @@ function fillAppVersion() {
 }
 
 function canSpeak() {
-  return !!(getNativeTts() || window.speechSynthesis);
+  return !!(getNativeTts() || window.speechSynthesis || typeof Audio !== "undefined");
+}
+
+/** Stable 8-char id — keep in sync with scripts/speech-text.mjs */
+function voiceClipId(text) {
+  const spoken = String(text);
+  let hash = 5381;
+  for (let i = 0; i < spoken.length; i++) {
+    hash = Math.imul(hash, 33) ^ spoken.charCodeAt(i);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+function voiceClipUrl(text) {
+  return `assets/voice/${voiceClipId(text)}.mp3`;
 }
 
 function holdMusicForSpeech() {
@@ -1345,7 +1370,17 @@ function releaseMusicAfterSpeech() {
   syncBgMusic();
 }
 
+function stopVoiceClip() {
+  if (!currentVoiceClip) return;
+  currentVoiceClip.onended = null;
+  currentVoiceClip.onerror = null;
+  currentVoiceClip.pause();
+  currentVoiceClip.src = "";
+  currentVoiceClip = null;
+}
+
 function stopSpeechEngine() {
+  stopVoiceClip();
   const tts = getNativeTts();
   if (tts) tts.stop().catch(() => {});
   if (window.speechSynthesis) window.speechSynthesis.cancel();
@@ -1373,6 +1408,10 @@ function speakNative(tts, text, interrupt) {
 
 function speakWeb(text, onEnd) {
   const synth = window.speechSynthesis;
+  if (!synth) {
+    if (onEnd) onEnd();
+    return;
+  }
   const utter = new SpeechSynthesisUtterance(text);
   utter.rate = speechSettings().rate;
   const voices = synth.getVoices();
@@ -1384,6 +1423,33 @@ function speakWeb(text, onEnd) {
   }
   synth.speak(utter);
   if (synth.paused) synth.resume();
+}
+
+function speakTts(text, interrupt, onEnd) {
+  const tts = getNativeTts();
+  if (tts) {
+    speakNative(tts, text, interrupt).then(onEnd).catch(onEnd);
+    return;
+  }
+  speakWeb(text, onEnd);
+}
+
+function speakClip(text, onEnd) {
+  const clip = new Audio(voiceClipUrl(text));
+  currentVoiceClip = clip;
+  const finish = () => {
+    if (currentVoiceClip === clip) currentVoiceClip = null;
+    if (onEnd) onEnd();
+  };
+  clip.onended = finish;
+  clip.onerror = () => {
+    if (currentVoiceClip === clip) currentVoiceClip = null;
+    speakTts(text, true, onEnd);
+  };
+  clip.play().catch(() => {
+    if (currentVoiceClip === clip) currentVoiceClip = null;
+    speakTts(text, true, onEnd);
+  });
 }
 
 function speakUtterance(text, { interrupt = true, onEnd } = {}) {
@@ -1398,12 +1464,13 @@ function speakUtterance(text, { interrupt = true, onEnd } = {}) {
     if (token !== speechToken) return;
     if (onEnd) onEnd();
   };
-  const tts = getNativeTts();
-  if (tts) {
-    speakNative(tts, text, interrupt).then(done).catch(done);
+  const line = String(text);
+  // Only the daily correction tip uses a pre-recorded clip for now.
+  if (line === CORRECTION_TIP_SPEECH && typeof Audio !== "undefined") {
+    speakClip(line, done);
     return;
   }
-  speakWeb(text, done);
+  speakTts(line, interrupt, done);
 }
 
 function clearGradeTimeout() {

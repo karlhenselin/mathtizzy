@@ -10,7 +10,7 @@ Open `index.html` in a browser, or serve the folder with any static host.
 2. Start practicing. Enter answers with the on-screen pad or the keyboard.
 3. Level up when every fact on the current grid is green, or stay and keep practicing.
 
-A fact turns **green** (mastered) when its average correct time is at or under the maximum-time setting **and** it has **4 recent correct answers** with **at most one miss** in the last 5 (so 4 in a row with no misses counts). The mastery bar fills with partial credit as facts improve, not only when they turn fully mastered. The Facts map shows unseen (white), never-missed progress (light greens), and ever-missed accuracy (orange → yellow).
+A fact turns **green** (mastered) when its average correct time is at or under the maximum-time setting **and** it has **4 recent correct answers** with **at most one miss** in the last 5 (so 4 in a row with no misses counts), **or** when it has never been missed, has at least **2 correct answers**, and that average is **under 75%** of the maximum-time setting. The mastery bar fills with partial credit as facts improve, not only when they turn fully mastered. The Facts map shows unseen (white), never-missed progress (light greens), and ever-missed accuracy (orange → yellow).
 
 Missed facts are spoken aloud (if sound is on) and highlighted in reading order — once to listen, then again to read along. The first miss each day shows a short tip explaining that. Sound off still walks the highlights at the same pace.
 
@@ -57,7 +57,15 @@ That copies the web assets into `www/`, syncs them into the native project, and 
 
 To make a Play Store upload: **Build → Generate Signed Bundle / APK**, choose **Android App Bundle**. The file is `android/app/build/outputs/bundle/release/app-release.aab`. Full signing steps are in [`playStoreAssets/RELEASE.md`](playStoreAssets/RELEASE.md).
 
-The project uses Capacitor 8 (`minSdk` 24, `targetSdk`/`compileSdk` 36). Android System WebView does not implement the Web Speech API, so the app uses `@capacitor-community/text-to-speech` on device and `speechSynthesis` in the browser. Speech timing can be tuned per platform in `SPEECH_BY_PLATFORM` inside `app.js` (`web`, `android`, `ios`).
+The daily correction tip uses a pre-recorded clip (Microsoft Edge neural TTS, same voice as Shepherd) at `assets/voice/`. Missed facts still use live TTS. Generate or refresh clips with Python `edge-tts` installed (`pip install edge-tts`), then:
+
+```bash
+npm run voice
+```
+
+Playback falls back to `@capacitor-community/text-to-speech` on Android or `speechSynthesis` in the browser if the clip is missing. Highlight timing can be tuned per platform in `SPEECH_BY_PLATFORM` inside `app.js` (`web`, `android`, `ios`).
+
+The project uses Capacitor 8 (`minSdk` 24, `targetSdk`/`compileSdk` 36).
 
 ## Files
 
@@ -67,6 +75,8 @@ The project uses Capacitor 8 (`minSdk` 24, `targetSdk`/`compileSdk` 36). Android
 - `package.json` — Capacitor dependencies and scripts
 - `capacitor.config.json` — app id and `webDir`
 - `scripts/copy-www.mjs` — copies static assets into `www/` for Capacitor
+- `scripts/generate-voice.mjs` — offline Edge TTS → `assets/voice/*.mp3`
+- `assets/voice/` — pre-recorded correction tip clip + `manifest.json`
 - `android/` — native Android project (Gradle module is `app`; the Play name stays Mathtizzy)
 - `.htaccess` — serves `index.html` as the directory index
 

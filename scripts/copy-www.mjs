@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 const root = process.cwd();
 const www = join(root, "www");
-const assets = ["index.html", "app.js", "styles.css", "favicon.svg", "music"];
+const assets = ["index.html", "app.js", "styles.css", "favicon.svg", "music", "assets"];
 
 if (existsSync(www)) rmSync(www, { recursive: true, force: true });
 mkdirSync(www, { recursive: true });
