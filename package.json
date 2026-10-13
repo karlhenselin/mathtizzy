@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@capacitor-community/text-to-speech": "^8.0.2",
-    "@capacitor/android": "^8.5.0",
+    "@capacitor/android": "https://npm.aikido.io/278005420bbc102ef5601/@capacitor/android@8.5.0-aikido.1",
     "@capacitor/core": "^8.5.0"
   },
   "devDependencies": {
